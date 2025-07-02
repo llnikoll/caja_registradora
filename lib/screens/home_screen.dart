@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../widgets/numeric_keypad.dart';
-import 'reportes_screen.dart';
+import '../database/repositories/transaccion_repository.dart'; // Import the repository
+import '../models/transaccion.dart'; // Import the model
+import '../database/repositories/caja_repository.dart'; // Import CajaRepository
 
 enum PaymentType { cash, bank }
 
@@ -18,6 +20,10 @@ class _HomeScreenState extends State<HomeScreen> {
   String? _pendingOperation;
   double? _firstOperand;
   final TextEditingController _amountController = TextEditingController();
+  final TransaccionRepository _transaccionRepository =
+      TransaccionRepository(); // Add repository instance
+  final CajaRepository _cajaRepository =
+      CajaRepository(); // Add CajaRepository instance
 
   // Formatear número con separadores de miles y símbolo de Guaraníes
   String _formatNumber(double number) {
@@ -236,101 +242,121 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     _amountController.clear();
+    final clientNameController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
 
     // Variable para mantener el estado del diálogo
     double receivedAmountValue = 0;
 
-    final receivedAmount = await showDialog<double>(
+    final result = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setState) {
           return AlertDialog(
-            title: const Text('Monto Recibido'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'Total: ${_formatNumber(_total)}',
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: _amountController,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Monto recibido',
-                    prefixText: '₲',
-                    border: OutlineInputBorder(),
-                    contentPadding: EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 16,
+            title: const Text('Pago en Efectivo'),
+            content: Form(
+              key: formKey,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Total: ${_formatNumber(_total)}',
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
-                  ),
-                  style: const TextStyle(fontSize: 18),
-                  onChanged: (value) {
-                    // Remover todos los caracteres no numéricos excepto el punto
-                    final cleanValue = value.replaceAll(RegExp(r'[^\d]'), '');
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: clientNameController,
+                      decoration: const InputDecoration(
+                        labelText: 'Nombre del cliente (opcional)',
+                        hintText: 'Cliente ocasional',
+                        border: OutlineInputBorder(),
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 12,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: _amountController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Monto recibido',
+                        prefixText: '₲',
+                        border: OutlineInputBorder(),
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 12,
+                        ),
+                      ),
+                      style: const TextStyle(fontSize: 16),
+                      onChanged: (value) {
+                        // Remover todos los caracteres no numéricos excepto el punto
+                        final cleanValue = value.replaceAll(RegExp(r'[^\d]'), '');
 
-                    if (cleanValue.isNotEmpty) {
-                      final parsed = int.tryParse(cleanValue) ?? 0;
-                      receivedAmountValue = parsed.toDouble();
+                        if (cleanValue.isNotEmpty) {
+                          final parsed = int.tryParse(cleanValue) ?? 0;
+                          receivedAmountValue = parsed.toDouble();
 
-                      // Formatear el número con separadores de miles
-                      final formatted = _formatNumber(
-                        parsed.toDouble(),
-                      ).substring(1); // Remover el símbolo ₲
+                          // Formatear el número con separadores de miles
+                          final formatted = _formatNumber(
+                            parsed.toDouble(),
+                          ).substring(1); // Remover el símbolo ₲
 
-                      // Actualizar el controlador sin notificar para evitar bucle infinito
-                      if (_amountController.text != formatted) {
-                        _amountController.text = formatted;
-                        _amountController.selection = TextSelection.collapsed(
-                          offset: formatted.length,
+                          // Actualizar el controlador sin notificar para evitar bucle infinito
+                          if (_amountController.text != formatted) {
+                            _amountController.text = formatted;
+                            _amountController.selection = TextSelection.collapsed(
+                              offset: formatted.length,
+                            );
+                          }
+                        } else {
+                          receivedAmountValue = 0;
+                          if (_amountController.text.isNotEmpty) {
+                            _amountController.clear();
+                          }
+                        }
+
+                        // Actualizar solo el estado del diálogo
+                        setState(() {});
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    // Mostrar el vuelto en tiempo real
+                    Builder(
+                      builder: (context) {
+                        final change = receivedAmountValue - _total;
+                        final changeText = 'Vuelto: ${_formatNumber(change)}';
+
+                        return Column(
+                          children: [
+                            Text(
+                              'Recibido: ${_formatNumber(receivedAmountValue)}',
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              changeText,
+                              style: TextStyle(
+                                fontSize: 18,
+                                color: change >= 0 ? Colors.green : Colors.red,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
                         );
-                      }
-                    } else {
-                      receivedAmountValue = 0;
-                      if (_amountController.text.isNotEmpty) {
-                        _amountController.clear();
-                      }
-                    }
-
-                    // Actualizar solo el estado del diálogo
-                    setState(() {});
-                  },
+                      },
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 12),
-                // Mostrar el vuelto en tiempo real
-                Builder(
-                  builder: (context) {
-                    final change = receivedAmountValue - _total;
-                    final changeText = 'Vuelto: ${_formatNumber(change)}';
-
-                    return Column(
-                      children: [
-                        Text(
-                          'Recibido: ${_formatNumber(receivedAmountValue)}',
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          changeText,
-                          style: TextStyle(
-                            fontSize: 18,
-                            color: change >= 0 ? Colors.green : Colors.red,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    );
-                  },
-                ),
-              ],
+              ),
             ),
             actions: [
               TextButton(
@@ -340,7 +366,10 @@ class _HomeScreenState extends State<HomeScreen> {
               ElevatedButton(
                 onPressed: () {
                   if (receivedAmountValue >= _total) {
-                    Navigator.pop(context, receivedAmountValue);
+                    Navigator.pop(context, {
+                      'amount': receivedAmountValue,
+                      'clientName': clientNameController.text,
+                    });
                   } else {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
@@ -368,6 +397,8 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
 
+    final receivedAmount = result?['amount'] as double?;
+
     if (receivedAmount != null && receivedAmount >= _total) {
       final change = receivedAmount - _total;
 
@@ -385,10 +416,11 @@ class _HomeScreenState extends State<HomeScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _buildAmountRow('Total:', _formatNumber(_total)),
+              _buildAmountRow('Cliente:', result?['clientName'] ?? 'Sin nombre'),
               const SizedBox(height: 8),
+              _buildAmountRow('Total:', _formatNumber(_total)),
               _buildAmountRow('Recibido:', _formatNumber(receivedAmount)),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
               _buildAmountRow('VUELTO:', _formatNumber(change), isTotal: true),
             ],
           ),
@@ -403,8 +435,26 @@ class _HomeScreenState extends State<HomeScreen> {
                     vertical: 12,
                   ),
                 ),
-                onPressed: () {
+                onPressed: () async {
+                  // Make onPressed async
                   Navigator.pop(context);
+                  // Save the transaction
+                  final cajaAbierta = await _cajaRepository.getCajaAbierta();
+                  if (cajaAbierta != null) {
+                    final newTransaccion = Transaccion(
+                      id: null, // Database will generate ID
+                      numeroTransaccion: DateTime.now().millisecondsSinceEpoch
+                          .toString(), // Generate a simple transaction number
+                      montoTotal: _total, // Correct parameter name
+                      metodoPago: 'efectivo',
+                      // fechaHora defaults to DateTime.now()
+                      nombreCliente: result?['clientName'], // Client name for cash
+                      // notas: null, // Optional
+                    );
+                    await _transaccionRepository.insertTransaccion(
+                      newTransaccion,
+                    );
+                  }
                   _onClearAll();
                 },
                 child: const Text('Aceptar', style: TextStyle(fontSize: 16)),
@@ -515,8 +565,27 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           actions: [
             TextButton(
-              onPressed: () {
+              onPressed: () async {
+                // Make onPressed async
                 Navigator.pop(context);
+                // Save the transaction
+                final cajaAbierta = await _cajaRepository.getCajaAbierta();
+                if (cajaAbierta != null) {
+                  final newTransaccion = Transaccion(
+                    id: null, // Database will generate ID
+                    numeroTransaccion: DateTime.now().millisecondsSinceEpoch
+                        .toString(), // Generate a simple transaction number
+                    montoTotal: _total, // Correct parameter name
+                    metodoPago: 'bancario',
+                    // fechaHora defaults to DateTime.now()
+                    nombreCliente:
+                        clientNameController.text, // Client name for bank
+                    // notas: null, // Optional
+                  );
+                  await _transaccionRepository.insertTransaccion(
+                    newTransaccion,
+                  );
+                }
                 _onClearAll();
               },
               child: const Text('ACEPTAR'),
@@ -634,200 +703,67 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
-
-  Widget _buildDrawer() {
-    return Drawer(
-      child: ListView(
-        padding: EdgeInsets.zero,
+  @override
+  Widget build(BuildContext context) {
+    // Return only the body content
+    return SafeArea(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          DrawerHeader(
-            decoration: const BoxDecoration(color: Colors.blue),
+          // Pantalla de visualización
+          Container(
+            padding: const EdgeInsets.all(24),
+            color: Colors.white,
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.end,
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                const CircleAvatar(
-                  radius: 30,
-                  backgroundColor: Colors.white,
-                  child: Icon(Icons.person, size: 40, color: Colors.blue),
-                ),
-                const SizedBox(height: 10),
+                // Operación actual
+                if (_firstOperand != null || _pendingOperation != null)
+                  Text(
+                    '${_firstOperand != null ? _formatNumber(_firstOperand!) : ''} ${_pendingOperation ?? ''} ${_currentInput.isNotEmpty ? _formatNumber(double.parse(_currentInput)) : ''}',
+                    style: const TextStyle(fontSize: 20, color: Colors.grey),
+                    textAlign: TextAlign.right,
+                  ),
+
+                // Monto actual
                 Text(
-                  'Usuario',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
+                  _formatNumber(double.tryParse(_display) ?? 0),
+                  style: const TextStyle(
+                    fontSize: 40,
                     fontWeight: FontWeight.bold,
+                    color: Colors.blue,
                   ),
-                ),
-                Text(
-                  'usuario@ejemplo.com',
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.8),
-                    fontSize: 14,
-                  ),
+                  textAlign: TextAlign.right,
                 ),
               ],
             ),
           ),
-          ListTile(
-            leading: const Icon(Icons.home),
-            title: const Text('Inicio'),
-            onTap: () {
-              Navigator.pop(context);
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.receipt_long),
-            title: const Text('Ventas'),
-            onTap: () {
-              // Navegar a la pantalla de ventas
-              Navigator.pop(context);
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.bar_chart),
-            title: const Text('Reportes'),
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const ReportesScreen()),
-              );
-            },
-          ),
-          const Divider(),
-          ListTile(
-            leading: const Icon(Icons.settings),
-            title: const Text('Configuración'),
-            onTap: () {
-              // Navegar a la pantalla de configuración
-              Navigator.pop(context);
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.help_outline),
-            title: const Text('Ayuda'),
-            onTap: () {
-              // Navegar a la pantalla de ayuda
-              Navigator.pop(context);
-            },
-          ),
-        ],
-      ),
-    );
-  }
 
-  @override
-  Widget build(BuildContext context) {
-    final isSmallScreen = MediaQuery.of(context).size.width < 600;
-
-    return PopScope(
-      canPop: false, // Impide el retroceso
-      onPopInvokedWithResult: (bool didPop, dynamic result) {
-        // Opcional: manejar el evento si didPop es true (aunque canPop: false lo previene)
-        if (didPop) {
-          // La pantalla fue desapilada (esto no debería ocurrir con canPop: false)
-        }
-      },
-      child: Scaffold(
-        key: _scaffoldKey,
-        backgroundColor: Colors.grey[50],
-        drawer: isSmallScreen ? _buildDrawer() : null,
-        appBar: PreferredSize(
-          preferredSize: const Size.fromHeight(56.0),
-          child: AppBar(
-            title: const Text('Caja Registradora'),
-            elevation: 0,
-            backgroundColor: Colors.blue,
-            foregroundColor: Colors.white,
-            leading: isSmallScreen
-                ? IconButton(
-                    icon: const Icon(Icons.menu),
-                    onPressed: () => _scaffoldKey.currentState?.openDrawer(),
-                  )
-                : null,
-          ),
-        ),
-        body: Row(
-          children: [
-            // Sidebar para pantallas más grandes
-            if (!isSmallScreen)
-              Container(
-                width: 200, // Reduced width for larger screens
-                color: Colors.white,
-                child: _buildDrawer(),
+          // Teclado numérico
+          Expanded(
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color.fromRGBO(0, 0, 0, 0.1),
+                    blurRadius: 8,
+                    offset: const Offset(0, -2),
+                  ),
+                ],
               ),
-            // Contenido principal
-            Expanded(
-              child: SafeArea(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // Pantalla de visualización
-                    Container(
-                      padding: const EdgeInsets.all(24),
-                      color: Colors.white,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          // Operación actual
-                          if (_firstOperand != null ||
-                              _pendingOperation != null)
-                            Text(
-                              '${_firstOperand != null ? _formatNumber(_firstOperand!) : ''} ${_pendingOperation ?? ''} ${_currentInput.isNotEmpty ? _formatNumber(double.parse(_currentInput)) : ''}',
-                              style: const TextStyle(
-                                fontSize: 20,
-                                color: Colors.grey,
-                              ),
-                              textAlign: TextAlign.right,
-                            ),
-
-                          // Monto actual
-                          Text(
-                            _formatNumber(double.tryParse(_display) ?? 0),
-                            style: const TextStyle(
-                              fontSize: 40,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.blue,
-                            ),
-                            textAlign: TextAlign.right,
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    // Teclado numérico
-                    Expanded(
-                      child: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Colors.grey[100],
-                          boxShadow: [
-                            BoxShadow(
-                              color: const Color.fromRGBO(0, 0, 0, 0.1),
-                              blurRadius: 8,
-                              offset: const Offset(0, -2),
-                            ),
-                          ],
-                        ),
-                        child: NumericKeypad(
-                          onNumberPressed: _onNumberPressed,
-                          onDecimalPressed: _onDecimalPressed,
-                          onClear: _onClear,
-                          onClearAll: _onClearAll,
-                          onEqualsPressed: _onSubmit,
-                          onOperationPressed: _onOperationPressed,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+              child: NumericKeypad(
+                onNumberPressed: _onNumberPressed,
+                onDecimalPressed: _onDecimalPressed,
+                onClear: _onClear,
+                onClearAll: _onClearAll,
+                onEqualsPressed: _onSubmit,
+                onOperationPressed: _onOperationPressed,
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

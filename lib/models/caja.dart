@@ -7,6 +7,7 @@ class Caja {
   double montoInicial;
   double? montoFinal;
   String estado; // 'abierta' o 'cerrada'
+  String? observaciones; // Observaciones opcionales al cerrar la caja
 
   Caja({
     this.id,
@@ -15,6 +16,7 @@ class Caja {
     DateTime? fechaApertura,
     this.fechaCierre,
     this.montoFinal,
+    this.observaciones,
   }) : fechaApertura = fechaApertura ?? DateTime.now();
 
   // Convertir un Map a Caja
@@ -29,6 +31,7 @@ class Caja {
                 : (map['monto_final'] as num).toDouble())
             : null,
         estado: map['estado'],
+        observaciones: map['observaciones'],
         fechaApertura: DateTime.parse(map['fecha_apertura']),
         fechaCierre: map['fecha_cierre'] != null
             ? DateTime.parse(map['fecha_cierre'])
@@ -41,6 +44,7 @@ class Caja {
         'monto_inicial': montoInicial,
         'monto_final': montoFinal,
         'estado': estado,
+        'observaciones': observaciones,
         'fecha_apertura': fechaApertura.toIso8601String(),
         'fecha_cierre': fechaCierre?.toIso8601String(),
       };

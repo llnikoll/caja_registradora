@@ -8,7 +8,7 @@ class DatabaseHelper {
   static final DatabaseHelper _instance = DatabaseHelper._internal();
   static Database? _database;
   static const String _databaseName = 'caja_registradora.db';
-  static const int _databaseVersion = 1;
+  static const int _databaseVersion = 2;
 
   // Nombres de tablas
   static const String tableTransacciones = 'transacciones';
@@ -66,6 +66,12 @@ class DatabaseHelper {
       path,
       version: _databaseVersion,
       onCreate: _onCreate,
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          // Agregar la columna observaciones a la tabla caja
+          await db.execute('ALTER TABLE $tableCaja ADD COLUMN observaciones TEXT');
+        }
+      },
     );
   }
 
@@ -78,7 +84,8 @@ class DatabaseHelper {
         $columnFechaCierre TEXT,
         $columnMontoInicial REAL NOT NULL,
         $columnMontoFinal REAL,
-        $columnEstado TEXT NOT NULL
+        $columnEstado TEXT NOT NULL,
+        observaciones TEXT
       )
     ''');
 

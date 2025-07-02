@@ -3,17 +3,16 @@ import 'package:provider/provider.dart';
 
 import 'database/database_helper.dart';
 import 'providers/cart_provider.dart';
-import 'screens/home_screen.dart';
-import 'screens/reportes_screen.dart';
+import 'widgets/main_layout.dart'; // Import the new MainLayout
 
 void main() async {
   // Asegurarse de que Flutter esté inicializado
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   // Inicializar la base de datos
   final dbHelper = DatabaseHelper();
   await dbHelper.database; // Esto creará la base de datos si no existe
-  
+
   runApp(
     MultiProvider(
       providers: [
@@ -40,11 +39,14 @@ class CajaRegistradoraApp extends StatelessWidget {
         ),
         useMaterial3: true,
       ),
-      initialRoute: '/',
-      routes: {
-        '/': (context) => const HomeScreen(),
-        '/reportes': (context) => const ReportesScreen(),
-      },
+      // Use MainLayout as the home widget
+      home: const MainLayout(),
+      // Remove initialRoute and routes as navigation is handled in MainLayout
+      // initialRoute: '/',
+      // routes: {
+      //   '/': (context) => const HomeScreen(),
+      //   '/reportes': (context) => const ReportesScreen(),
+      // },
     );
   }
 }

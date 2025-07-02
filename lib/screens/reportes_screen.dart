@@ -61,30 +61,11 @@ class ReportesScreenState extends State<ReportesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Reportes'),
-        actions: [
-          IconButton(icon: const Icon(Icons.refresh), onPressed: _cargarDatos),
-        ],
-      ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _cajaAbierta == null
-          ? _buildSinCajaAbierta()
-          : _buildContenido(),
-      floatingActionButton: _cajaAbierta != null
-          ? FloatingActionButton.extended(
-              onPressed: _mostrarDialogoCerrarCaja,
-              icon: const Icon(Icons.point_of_sale),
-              label: const Text('Cerrar Caja'),
-            )
-          : FloatingActionButton.extended(
-              onPressed: _mostrarDialogoAbrirCaja,
-              icon: const Icon(Icons.add),
-              label: const Text('Abrir Caja'),
-            ),
-    );
+    return _isLoading
+        ? const Center(child: CircularProgressIndicator())
+        : _cajaAbierta == null
+        ? _buildSinCajaAbierta()
+        : _buildContenido();
   }
 
   Widget _buildSinCajaAbierta() {
@@ -186,6 +167,11 @@ class ReportesScreenState extends State<ReportesScreen> {
   }
 
   Widget _buildResumenVentas() {
+    final montoInicial = _cajaAbierta?.montoInicial ?? 0.0;
+    final totalEfectivo = _resumenHoy['totalEfectivo'] ?? 0.0;
+    final totalTransferencia = _resumenHoy['totalTransferencia'] ?? 0.0;
+    // Sumar monto inicial + efectivo + transferencia
+    final totalRecaudado = montoInicial + totalEfectivo + totalTransferencia;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -198,21 +184,27 @@ class ReportesScreenState extends State<ReportesScreen> {
             ),
             const Divider(),
             _buildItemResumen(
+              'Monto Inicial',
+              montoInicial,
+              Icons.savings,
+              Colors.orange,
+            ),
+            _buildItemResumen(
               'Efectivo',
-              _resumenHoy['totalEfectivo'],
+              totalEfectivo,
               Icons.money,
               Colors.green,
             ),
             _buildItemResumen(
               'Transferencia',
-              _resumenHoy['totalTransferencia'],
+              totalTransferencia,
               Icons.account_balance_wallet,
               Colors.blue,
             ),
             const Divider(),
             _buildItemResumen(
-              'Total General',
-              _resumenHoy['totalGeneral'],
+              'Total Recaudado',
+              totalRecaudado,
               Icons.attach_money,
               Colors.blueAccent,
               isTotal: true,
@@ -406,129 +398,5 @@ class ReportesScreenState extends State<ReportesScreen> {
     );
 
     await _cargarDatos();
-  }
-
-  Future<void> _mostrarDialogoCerrarCaja() async {
-    final montoController = TextEditingController(
-      text: _resumenHoy['totalGeneral'].toStringAsFixed(0),
-    );
-    final formKey = GlobalKey<FormState>();
-
-    if (!mounted) return;
-
-    await showDialog(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Cerrar Caja'),
-        content: SingleChildScrollView(
-          child: Form(
-            key: formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Resumen del día:'),
-                const SizedBox(height: 16),
-                _buildResumenItem('Efectivo', _resumenHoy['totalEfectivo']),
-                _buildResumenItem(
-                  'Transferencia',
-                  _resumenHoy['totalTransferencia'],
-                ),
-                const Divider(),
-                _buildResumenItem(
-                  'Total General',
-                  _resumenHoy['totalGeneral'],
-                  isTotal: true,
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: montoController,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Monto en Caja',
-                    prefixText: '₲',
-                    border: OutlineInputBorder(),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Por favor ingrese el monto en caja';
-                    }
-                    if (double.tryParse(value) == null) {
-                      return 'Ingrese un monto válido';
-                    }
-                    return null;
-                  },
-                ),
-              ],
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              if (!formKey.currentState!.validate()) return;
-
-              final monto = double.parse(montoController.text);
-              try {
-                await _cajaRepository.cerrarCaja(monto);
-                if (!mounted) return;
-
-                Navigator.pop(context, true);
-                await _cargarDatos();
-
-                if (!mounted) return;
-                final messenger = ScaffoldMessenger.of(context);
-                messenger.showSnackBar(
-                  const SnackBar(content: Text('Caja cerrada exitosamente')),
-                );
-              } catch (e) {
-                if (!mounted) return;
-                final messenger = ScaffoldMessenger.of(context);
-                messenger.showSnackBar(
-                  SnackBar(content: Text('Error al cerrar caja: $e')),
-                );
-              }
-            },
-            child: const Text('Cerrar Caja'),
-          ),
-        ],
-      ),
-    );
-
-    await _cargarDatos();
-  }
-
-  Widget _buildResumenItem(String label, double monto, {bool isTotal = false}) {
-    final formatter = NumberFormat.currency(
-      symbol: '₲',
-      decimalDigits: 0,
-      locale: 'es_PY',
-    );
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
-            ),
-          ),
-          Text(
-            formatter.format(monto),
-            style: TextStyle(
-              fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
-              color: isTotal ? Theme.of(context).primaryColor : null,
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }

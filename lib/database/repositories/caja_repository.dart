@@ -39,23 +39,30 @@ class CajaRepository {
     return id;
   }
 
-  // Cerrar caja
-  Future<void> cerrarCaja(double montoFinal) async {
+  // Cerrar la caja actual
+  Future<void> cerrarCaja(double montoFinal, {String? observaciones}) async {
     final db = await _databaseHelper.database;
     final caja = await getCajaAbierta();
     
     if (caja == null) {
       throw Exception('No hay caja abierta para cerrar');
     }
+
+    final updateData = <String, dynamic>{
+      'estado': 'cerrada',
+      'monto_final': montoFinal,
+      'fecha_cierre': DateTime.now().toIso8601String(),
+    };
     
+    // Solo agregar observaciones si no es nulo
+    if (observaciones != null) {
+      updateData['observaciones'] = observaciones;
+    }
+
     await db.update(
       DatabaseHelper.tableCaja,
-      {
-        DatabaseHelper.columnEstado: 'cerrada',
-        DatabaseHelper.columnMontoFinal: montoFinal,
-        DatabaseHelper.columnFechaCierre: DateTime.now().toIso8601String(),
-      },
-      where: '${DatabaseHelper.columnId} = ?',
+      updateData,
+      where: 'id = ?',
       whereArgs: [caja.id],
     );
     
