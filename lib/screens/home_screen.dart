@@ -296,7 +296,10 @@ class _HomeScreenState extends State<HomeScreen> {
                       style: const TextStyle(fontSize: 16),
                       onChanged: (value) {
                         // Remover todos los caracteres no numéricos excepto el punto
-                        final cleanValue = value.replaceAll(RegExp(r'[^\d]'), '');
+                        final cleanValue = value.replaceAll(
+                          RegExp(r'[^\d]'),
+                          '',
+                        );
 
                         if (cleanValue.isNotEmpty) {
                           final parsed = int.tryParse(cleanValue) ?? 0;
@@ -310,9 +313,10 @@ class _HomeScreenState extends State<HomeScreen> {
                           // Actualizar el controlador sin notificar para evitar bucle infinito
                           if (_amountController.text != formatted) {
                             _amountController.text = formatted;
-                            _amountController.selection = TextSelection.collapsed(
-                              offset: formatted.length,
-                            );
+                            _amountController.selection =
+                                TextSelection.collapsed(
+                                  offset: formatted.length,
+                                );
                           }
                         } else {
                           receivedAmountValue = 0;
@@ -416,7 +420,10 @@ class _HomeScreenState extends State<HomeScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _buildAmountRow('Cliente:', result?['clientName'] ?? 'Sin nombre'),
+              _buildAmountRow(
+                'Cliente:',
+                result?['clientName'] ?? 'Sin nombre',
+              ),
               const SizedBox(height: 8),
               _buildAmountRow('Total:', _formatNumber(_total)),
               _buildAmountRow('Recibido:', _formatNumber(receivedAmount)),
@@ -448,7 +455,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       montoTotal: _total, // Correct parameter name
                       metodoPago: 'efectivo',
                       // fechaHora defaults to DateTime.now()
-                      nombreCliente: result?['clientName'], // Client name for cash
+                      nombreCliente:
+                          result?['clientName'], // Client name for cash
                       // notas: null, // Optional
                     );
                     await _transaccionRepository.insertTransaccion(
@@ -576,7 +584,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     numeroTransaccion: DateTime.now().millisecondsSinceEpoch
                         .toString(), // Generate a simple transaction number
                     montoTotal: _total, // Correct parameter name
-                    metodoPago: 'bancario',
+                    metodoPago: 'transferencia',
                     // fechaHora defaults to DateTime.now()
                     nombreCliente:
                         clientNameController.text, // Client name for bank
