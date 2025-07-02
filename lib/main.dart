@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'database/database_helper.dart';
 import 'providers/cart_provider.dart';
 import 'widgets/main_layout.dart'; // Import the new MainLayout
+import 'restart_widget.dart';
 
 void main() async {
   // Asegurarse de que Flutter esté inicializado
@@ -14,12 +15,14 @@ void main() async {
   await dbHelper.database; // Esto creará la base de datos si no existe
 
   runApp(
-    MultiProvider(
-      providers: [
-        ChangeNotifierProvider(create: (context) => CartProvider()),
-        // Aquí podrías agregar más providers si es necesario
-      ],
-      child: const CajaRegistradoraApp(),
+    RestartWidget(
+      child: MultiProvider(
+        providers: [
+          ChangeNotifierProvider(create: (context) => CartProvider()),
+          // Aquí podrías agregar más providers si es necesario
+        ],
+        child: const CajaRegistradoraApp(),
+      ),
     ),
   );
 }

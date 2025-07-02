@@ -4,6 +4,8 @@ import '../database/repositories/caja_repository.dart';
 import '../database/repositories/transaccion_repository_ext.dart';
 import '../models/caja.dart';
 import '../models/transaccion.dart';
+import '../services/caja_events.dart';
+import '../utils/formato_moneda.dart';
 
 class HistorialCajasScreen extends StatefulWidget {
   const HistorialCajasScreen({super.key});
@@ -205,7 +207,7 @@ class _HistorialCajasScreenState extends State<HistorialCajasScreen> {
         Text(label, style: const TextStyle(color: Colors.grey, fontSize: 12)),
         const SizedBox(height: 4),
         Text(
-          '₲${monto.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (match) => '${match[1]}.')}',
+          FormatoMoneda.formatear(monto),
           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
         ),
       ],
@@ -324,10 +326,7 @@ class _HistorialCajasScreenState extends State<HistorialCajasScreen> {
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: () {
-                      Navigator.pop(context);
-                      // Aquí podrías navegar a la pantalla de cierre de caja
-                    },
+                    onPressed: () => _mostrarDialogoCerrarCaja(caja),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.red,
                       padding: const EdgeInsets.symmetric(vertical: 16),
@@ -445,6 +444,82 @@ class _HistorialCajasScreenState extends State<HistorialCajasScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _mostrarDialogoCerrarCaja(Caja caja) async {
+    final montoController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+
+    if (!mounted) return;
+    Navigator.pop(context); // Cierra el sheet de detalles
+
+    final bool? cajaCerrada = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Cerrar Caja #${caja.id}'),
+        content: Form(
+          key: formKey,
+          child: TextFormField(
+            controller: montoController,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(
+              labelText: 'Monto Final en Caja',
+              prefixText: '₲',
+              border: OutlineInputBorder(),
+            ),
+            validator: (value) {
+              if (value == null || value.isEmpty) {
+                return 'Por favor ingrese un monto';
+              }
+              if (double.tryParse(value) == null) {
+                return 'Ingrese un monto válido';
+              }
+              return null;
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              if (!formKey.currentState!.validate()) return;
+              
+              // Capture values needed after async gap
+              final currentMounted = mounted;
+              if (!currentMounted) return;
+              
+              final scaffoldMessenger = ScaffoldMessenger.of(dialogContext);
+              final navigator = Navigator.of(dialogContext);
+              
+              try {
+                final montoFinal = double.parse(montoController.text);
+                await _cajaRepository.cerrarCaja(montoFinal);
+                CajaEvents().notificar(CajaStateEvent.cerrada);
+                navigator.pop(true);
+              } catch (e) {
+                navigator.pop(false);
+                scaffoldMessenger.showSnackBar(
+                  SnackBar(content: Text('Error al cerrar caja: $e')),
+                );
+              }
+            },
+            child: const Text('Confirmar Cierre'),
+          ),
+        ],
+      ),
+    );
+
+    if (cajaCerrada == true) {
+      _cargarCajas(); // Recargar la lista de cajas
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Caja cerrada exitosamente')),
+        );
+      }
+    }
   }
 
   // Se eliminó el método _buildObservaciones ya que no se usa

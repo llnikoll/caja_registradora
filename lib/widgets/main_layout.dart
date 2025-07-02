@@ -8,6 +8,7 @@ import '../database/repositories/caja_repository.dart';
 import '../database/repositories/transaccion_repository.dart';
 import '../models/caja.dart';
 import 'cierre_caja_dialog.dart';
+import '../restart_widget.dart';
 
 class MainLayout extends StatefulWidget {
   const MainLayout({super.key});
@@ -26,6 +27,10 @@ class _MainLayoutState extends State<MainLayout> {
   @override
   void initState() {
     super.initState();
+    // Siempre iniciar en modo loading para evitar pantalla negra tras reinicio
+    setState(() {
+      _isLoading = true;
+    });
     _verificarEstadoCaja();
   }
 
@@ -37,10 +42,7 @@ class _MainLayoutState extends State<MainLayout> {
         _cajaActual = caja;
         _isLoading = false;
       });
-
-      if (caja == null) {
-        _mostrarDialogoAperturaCaja();
-      }
+      // Ya no mostrar automáticamente el diálogo de apertura
     } catch (e) {
       setState(() => _isLoading = false);
       if (mounted) {
@@ -56,6 +58,25 @@ class _MainLayoutState extends State<MainLayout> {
   Future<void> _mostrarDialogoAperturaCaja() async {
     final montoController = TextEditingController();
     final formKey = GlobalKey<FormState>();
+
+    // Formateo en tiempo real
+    montoController.addListener(() {
+      final text = montoController.text.replaceAll('.', '').replaceAll(',', '');
+      if (text.isEmpty) return;
+      final value = double.tryParse(text);
+      if (value != null) {
+        final formatted = value
+            .toStringAsFixed(0)
+            .replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (match) => '.');
+        if (montoController.text != formatted) {
+          montoController.value = montoController.value.copyWith(
+            text: formatted,
+            selection: TextSelection.collapsed(offset: formatted.length),
+          );
+        }
+      }
+    });
+
     final montoInicial = await showDialog<double?>(
       context: context,
       barrierDismissible: false,
@@ -75,7 +96,8 @@ class _MainLayoutState extends State<MainLayout> {
               if (value == null || value.isEmpty) {
                 return 'Por favor ingrese un monto';
               }
-              if (double.tryParse(value) == null) {
+              final clean = value.replaceAll('.', '').replaceAll(',', '');
+              if (double.tryParse(clean) == null) {
                 return 'Ingrese un monto válido';
               }
               return null;
@@ -90,7 +112,10 @@ class _MainLayoutState extends State<MainLayout> {
           ElevatedButton(
             onPressed: () {
               if (formKey.currentState!.validate()) {
-                Navigator.pop(context, double.parse(montoController.text));
+                final clean = montoController.text
+                    .replaceAll('.', '')
+                    .replaceAll(',', '');
+                Navigator.pop(context, double.parse(clean));
               }
             },
             child: const Text('ACEPTAR'),
@@ -112,32 +137,59 @@ class _MainLayoutState extends State<MainLayout> {
           ).showSnackBar(SnackBar(content: Text('Error al abrir la caja: $e')));
         }
       }
-    } else if (mounted) {
-      // Si el usuario canceló, volver a verificar el estado
-      await _verificarEstadoCaja();
     }
+    // Si cancela, no hacer nada
   }
 
-  // List of widgets to display in the body
-  List<Widget> get _screens => [
-    if (_cajaActual != null) const HomeScreen() else const Placeholder(),
-    const VentasScreen(),
-    const ReportesScreen(),
-    const ConfiguracionScreen(),
-    const AyudaScreen(),
-  ];
-
   void _onItemTapped(int index) {
-    // Si no hay caja abierta, solo permitir ir a Configuración y Ayuda
-    if (_cajaActual == null && index != 3 && index != 4) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Debe abrir una caja primero')),
-      );
-      return;
-    }
     setState(() {
       _selectedIndex = index;
     });
+  }
+
+  // List of screens to display in the body
+  final List<Widget> _screens = [
+    const HomeScreen(key: PageStorageKey('home')),
+    const VentasScreen(key: PageStorageKey('ventas')),
+    const ReportesScreen(key: PageStorageKey('reportes')),
+    const ConfiguracionScreen(key: PageStorageKey('config')),
+    const AyudaScreen(key: PageStorageKey('ayuda')),
+  ];
+
+  Widget _buildSinCajaAbierta() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(
+            Icons.point_of_sale_outlined,
+            size: 64,
+            color: Colors.grey,
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'No hay caja abierta',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Puedes explorar la app, pero para registrar ventas debes abrir una caja.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.grey),
+          ),
+          const SizedBox(height: 24),
+          ElevatedButton.icon(
+            onPressed: _mostrarDialogoAperturaCaja,
+            icon: const Icon(Icons.add),
+            label: const Text('Abrir Caja'),
+            style: ElevatedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+              textStyle: const TextStyle(fontSize: 18),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -166,7 +218,7 @@ class _MainLayoutState extends State<MainLayout> {
               'Ayuda',
             ][_selectedIndex],
           ),
-          actions: _cajaActual != null
+          actions: _cajaActual != null && _selectedIndex == 0
               ? [
                   IconButton(
                     icon: const Icon(Icons.point_of_sale),
@@ -189,8 +241,17 @@ class _MainLayoutState extends State<MainLayout> {
                 child: _buildDrawer(),
               ),
             Expanded(
-              child:
-                  _screens[_selectedIndex], // Display the selected screen content
+              child: IndexedStack(
+                index: _selectedIndex,
+                children: _cajaActual != null
+                    ? _screens
+                    : [
+                        _buildSinCajaAbierta(),
+                        ..._screens.sublist(
+                          1,
+                        ), // Mostrar otras pantallas normalmente
+                      ],
+              ), // Display the selected screen content
             ),
           ],
         ),
@@ -222,45 +283,43 @@ class _MainLayoutState extends State<MainLayout> {
       return;
     }
 
-    // Verificar que el widget sigue montado antes de mostrar el diálogo
     if (!mounted) return;
 
-    // Obtener el Navigator antes del showDialog
-    final navigator = Navigator.of(context);
+    // Mostrar el diálogo y manejar el resultado
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
-      builder: (context) => CierreCajaDialog(
-        montoInicial: _cajaActual?.montoInicial ?? 0,
-        totalVentas: totalVentas,
-        onCerrarCaja: (montoFinal, observaciones) {
-          navigator.pop({
-            'montoFinal': montoFinal,
-            'observaciones': observaciones,
-          });
-        },
-      ),
+      barrierDismissible: false, // Evitar que se cierre tocando fuera
+      builder: (BuildContext dialogContext) {
+        return CierreCajaDialog(
+          montoInicial: _cajaActual?.montoInicial ?? 0,
+          totalVentas: totalVentas,
+          onCerrarCaja: (montoFinal, observaciones) {
+            Navigator.of(
+              dialogContext,
+            ).pop({'montoFinal': montoFinal, 'observaciones': observaciones});
+          },
+        );
+      },
     );
 
-    if (result != null) {
-      try {
-        await _cajaRepository.cerrarCaja(
-          result['montoFinal'] as double,
-          observaciones: result['observaciones'] as String?,
-        );
-        if (mounted) {
-          setState(() {
-            _cajaActual = null;
-          });
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Caja cerrada correctamente')),
-          );
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error al cerrar la caja: $e')),
-          );
-        }
+    if (result == null) return; // Usuario canceló
+
+    try {
+      // Cerrar la caja en la base de datos
+      await _cajaRepository.cerrarCaja(
+        result['montoFinal'] as double,
+        observaciones: result['observaciones'] as String?,
+      );
+
+      // Reiniciar toda la app para forzar el estado inicial
+      if (mounted) {
+        RestartWidget.restartApp(context);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error al cerrar la caja: $e')));
       }
     }
   }
@@ -296,7 +355,15 @@ class _MainLayoutState extends State<MainLayout> {
             leading: const Icon(Icons.home),
             title: const Text('Inicio'),
             selected: _selectedIndex == 0,
-            onTap: () => _onItemTapped(0),
+            onTap: () async {
+              // Pequeño delay para asegurar reconstrucción limpia
+              await Future.delayed(const Duration(milliseconds: 100));
+              if (!mounted) return;
+              Navigator.of(context).pushAndRemoveUntil(
+                MaterialPageRoute(builder: (context) => const MainLayout()),
+                (route) => false,
+              );
+            },
           ),
           ListTile(
             leading: const Icon(Icons.point_of_sale),

@@ -3,6 +3,7 @@ import '../database/repositories/caja_repository.dart';
 import '../database/repositories/transaccion_repository.dart';
 import '../models/caja.dart';
 import '../models/transaccion.dart';
+import '../utils/formato_moneda.dart';
 
 class VentasHistorialScreen extends StatefulWidget {
   const VentasHistorialScreen({super.key});
@@ -30,6 +31,10 @@ class _VentasHistorialScreenState extends State<VentasHistorialScreen> {
       _cajas = cajas;
       _isLoading = false;
     });
+  }
+
+  String _formatearMonto(double monto) {
+    return FormatoMoneda.formatear(monto);
   }
 
   @override
@@ -92,12 +97,12 @@ class _VentasHistorialScreenState extends State<VentasHistorialScreen> {
             Text('Cierre: ${caja.fechaCierreFormateada}'),
           const Divider(),
           Text('Monto Inicial: ${caja.montoInicialFormateado}'),
-          Text('Total Efectivo: ₲${totalEfectivo.toStringAsFixed(0)}'),
+          Text('Total Efectivo: ${_formatearMonto(totalEfectivo)}'),
           Text(
-            'Total Transferencia: ₲${totalTransferencia.toStringAsFixed(0)}',
+            'Total Transferencia: ${_formatearMonto(totalTransferencia)}',
           ),
           Text(
-            'Total Sesión: ₲${(caja.montoInicial + totalEfectivo + totalTransferencia).toStringAsFixed(0)}',
+            'Total Sesión: ${_formatearMonto(caja.montoInicial + totalEfectivo + totalTransferencia)}',
           ),
           const Divider(),
           const Text(

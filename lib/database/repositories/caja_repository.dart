@@ -4,6 +4,18 @@ import '../../models/caja.dart';
 class CajaRepository {
   final DatabaseHelper _databaseHelper = DatabaseHelper();
 
+  /// Obtiene todas las cajas cerradas, ordenadas por fecha de cierre descendente
+  Future<List<Caja>> getCajasCerradas() async {
+    final db = await _databaseHelper.database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      DatabaseHelper.tableCaja,
+      where: '${DatabaseHelper.columnEstado} = ?',
+      whereArgs: ['cerrada'],
+      orderBy: '${DatabaseHelper.columnFechaCierre} DESC',
+    );
+    return List.generate(maps.length, (i) => Caja.fromMap(maps[i]));
+  }
+
   // Abrir caja
   Future<int> abrirCaja(double montoInicial) async {
     final db = await _databaseHelper.database;

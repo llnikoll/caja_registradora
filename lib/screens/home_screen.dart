@@ -3,6 +3,8 @@ import '../widgets/numeric_keypad.dart';
 import '../database/repositories/transaccion_repository.dart'; // Import the repository
 import '../models/transaccion.dart'; // Import the model
 import '../database/repositories/caja_repository.dart'; // Import CajaRepository
+import '../services/caja_events.dart';
+import '../utils/formato_moneda.dart';
 
 enum PaymentType { cash, bank }
 
@@ -13,7 +15,9 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
   String _display = '0';
   String _currentInput = '';
   double _total = 0.0;
@@ -25,9 +29,9 @@ class _HomeScreenState extends State<HomeScreen> {
   final CajaRepository _cajaRepository =
       CajaRepository(); // Add CajaRepository instance
 
-  // Formatear número con separadores de miles y símbolo de Guaraníes
+  // Usar el formateador de moneda consistente
   String _formatNumber(double number) {
-    return '₲${number.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]}.')}';
+    return FormatoMoneda.formatear(number);
   }
 
   void _onNumberPressed(String number) {
@@ -281,7 +285,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    TextField(
+                    TextFormField(
                       controller: _amountController,
                       keyboardType: TextInputType.number,
                       decoration: const InputDecoration(
@@ -292,40 +296,50 @@ class _HomeScreenState extends State<HomeScreen> {
                           horizontal: 12,
                           vertical: 12,
                         ),
+                        counterText: '',
                       ),
+                      maxLength: 13, // Para manejar hasta 999,999,999
                       style: const TextStyle(fontSize: 16),
                       onChanged: (value) {
-                        // Remover todos los caracteres no numéricos excepto el punto
-                        final cleanValue = value.replaceAll(
-                          RegExp(r'[^\d]'),
-                          '',
-                        );
-
+                        // Obtener posición actual del cursor
+                        final cursorPos = _amountController.selection.baseOffset;
+                        
+                        // Limpiar el valor, mantener solo dígitos
+                        final cleanValue = value.replaceAll(RegExp(r'[^\d]'), '');
+                        
+                        // Actualizar el valor numérico
+                        receivedAmountValue = cleanValue.isEmpty ? 0 : double.parse(cleanValue);
+                        
+                        // Formatear con puntos como separadores de miles
+                        String formatted = '';
                         if (cleanValue.isNotEmpty) {
-                          final parsed = int.tryParse(cleanValue) ?? 0;
-                          receivedAmountValue = parsed.toDouble();
-
-                          // Formatear el número con separadores de miles
-                          final formatted = _formatNumber(
-                            parsed.toDouble(),
-                          ).substring(1); // Remover el símbolo ₲
-
-                          // Actualizar el controlador sin notificar para evitar bucle infinito
-                          if (_amountController.text != formatted) {
-                            _amountController.text = formatted;
-                            _amountController.selection =
-                                TextSelection.collapsed(
-                                  offset: formatted.length,
-                                );
-                          }
-                        } else {
-                          receivedAmountValue = 0;
-                          if (_amountController.text.isNotEmpty) {
-                            _amountController.clear();
-                          }
+                          final number = int.parse(cleanValue);
+                          formatted = number.toString().replaceAllMapped(
+                            RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+                            (Match m) => '${m[1]}.',
+                          );
                         }
-
-                        // Actualizar solo el estado del diálogo
+                        
+                        // Calcular nueva posición del cursor
+                        int newCursorPos = cursorPos;
+                        if (value.length < formatted.length) {
+                          // Se agregó un punto
+                          newCursorPos += (formatted.length - value.length);
+                        } else if (value.length > formatted.length) {
+                          // Se eliminó un punto
+                          newCursorPos -= (value.length - formatted.length);
+                        }
+                        
+                        // Asegurar que la posición sea válida
+                        newCursorPos = newCursorPos.clamp(0, formatted.length);
+                        
+                        // Actualizar el controlador
+                        _amountController.value = TextEditingValue(
+                          text: formatted,
+                          selection: TextSelection.collapsed(offset: newCursorPos),
+                        );
+                        
+                        // Actualizar el estado
                         setState(() {});
                       },
                     ),
@@ -376,9 +390,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     });
                   } else {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
+                      SnackBar(
                         content: Text(
-                          'El monto recibido debe ser mayor o igual al total',
+                          'El monto recibido (₲${receivedAmountValue.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')}) debe ser mayor o igual al total (₲${_total.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')})',
                         ),
                         backgroundColor: Colors.red,
                       ),
@@ -446,7 +460,14 @@ class _HomeScreenState extends State<HomeScreen> {
                   // Make onPressed async
                   Navigator.pop(context);
                   // Save the transaction
-                  final cajaAbierta = await _cajaRepository.getCajaAbierta();
+                  var cajaAbierta = await _cajaRepository.getCajaAbierta();
+                  if (cajaAbierta == null) {
+                    final bool success = await _promptAbrirCaja();
+                    if (success) {
+                      cajaAbierta = await _cajaRepository.getCajaAbierta();
+                    }
+                  }
+
                   if (cajaAbierta != null) {
                     final newTransaccion = Transaccion(
                       id: null, // Database will generate ID
@@ -577,7 +598,14 @@ class _HomeScreenState extends State<HomeScreen> {
                 // Make onPressed async
                 Navigator.pop(context);
                 // Save the transaction
-                final cajaAbierta = await _cajaRepository.getCajaAbierta();
+                var cajaAbierta = await _cajaRepository.getCajaAbierta();
+                if (cajaAbierta == null) {
+                  final bool success = await _promptAbrirCaja();
+                  if (success) {
+                    cajaAbierta = await _cajaRepository.getCajaAbierta();
+                  }
+                }
+
                 if (cajaAbierta != null) {
                   final newTransaccion = Transaccion(
                     id: null, // Database will generate ID
@@ -602,6 +630,143 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       );
     }
+  }
+
+  String _formatInput(String value, {bool format = false}) {
+    // Solo permitir dígitos
+    String digits = value.replaceAll(RegExp(r'[^\d]'), '');
+    
+    if (!format || digits.isEmpty) return digits;
+    
+    // Formatear con puntos como separadores de miles
+    String formatted = '';
+    for (int i = 0; i < digits.length; i++) {
+      if (i > 0 && (digits.length - i) % 3 == 0) {
+        formatted += '.';
+      }
+      formatted += digits[i];
+    }
+    
+    return formatted;
+  }
+
+  Future<bool> _promptAbrirCaja() async {
+    final montoController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    
+    // Variable para mantener el valor numérico real
+    double montoReal = 0;
+
+    if (!mounted) return false;
+
+    final bool? cajaAbierta = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Abrir Caja'),
+        content: Form(
+          key: formKey,
+          child: TextFormField(
+            controller: montoController,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(
+              labelText: 'Monto Inicial',
+              prefixText: '₲ ',
+              border: OutlineInputBorder(),
+              hintText: '0',
+              counterText: '',
+            ),
+            maxLength: 10, // Límite razonable para montos
+            onChanged: (value) {
+              // Obtener la posición actual del cursor
+              final cursorPos = montoController.selection.baseOffset;
+              
+              // Obtener solo los dígitos
+              final cleanValue = _formatInput(value);
+              
+              // Formatear con puntos
+              final formattedValue = _formatInput(cleanValue, format: true);
+              
+              // Calcular la nueva posición del cursor
+              int newCursorPos = cursorPos;
+              if (value.length < formattedValue.length) {
+                // Se agregó un punto
+                newCursorPos += (formattedValue.length - value.length);
+              } else if (value.length > formattedValue.length) {
+                // Se eliminó un punto
+                newCursorPos -= (value.length - formattedValue.length);
+              }
+              
+              // Asegurar que la posición del cursor sea válida
+              newCursorPos = newCursorPos.clamp(0, formattedValue.length);
+              
+              // Actualizar el controlador con el valor formateado
+              montoController.value = TextEditingValue(
+                text: formattedValue,
+                selection: TextSelection.collapsed(offset: newCursorPos),
+              );
+              
+              // Actualizar el valor numérico real (sin formato)
+              montoReal = double.tryParse(cleanValue) ?? 0.0;
+            },
+            validator: (value) {
+              if (value == null || value.isEmpty) {
+                return 'Por favor ingrese un monto';
+              }
+              
+              final cleanValue = _formatInput(value);
+              final numericValue = double.tryParse(cleanValue);
+              
+              if (numericValue == null) {
+                return 'Ingrese un monto válido';
+              }
+              
+              if (numericValue <= 0) {
+                return 'El monto debe ser mayor a cero';
+              }
+              
+              return null;
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              if (!formKey.currentState!.validate()) return;
+
+              // Capture values needed after async gap
+              final currentMounted = mounted;
+              if (!currentMounted) return;
+              
+              final scaffoldMessenger = ScaffoldMessenger.of(context);
+              final navigator = Navigator.of(dialogContext);
+              
+              try {
+                // Usar el valor numérico real que ya tenemos
+                await _cajaRepository.abrirCaja(montoReal);
+                CajaEvents().notificar(CajaStateEvent.abierta);
+                
+                navigator.pop(true);
+                scaffoldMessenger.showSnackBar(
+                  const SnackBar(content: Text('Caja abierta exitosamente')),
+                );
+              } catch (e) {
+                navigator.pop(false);
+                scaffoldMessenger.showSnackBar(
+                  SnackBar(content: Text('Error al abrir caja: $e')),
+                );
+              }
+            },
+            child: const Text('Abrir'),
+          ),
+        ],
+      ),
+    );
+
+    return cajaAbierta ?? false;
   }
 
   Widget _buildPaymentMethodButton({
@@ -713,6 +878,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // Necesario para AutomaticKeepAliveClientMixin
     // Return only the body content
     return SafeArea(
       child: Column(

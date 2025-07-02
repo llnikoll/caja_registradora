@@ -1,10 +1,19 @@
 import 'package:flutter/material.dart';
 
-class ConfiguracionScreen extends StatelessWidget {
+class ConfiguracionScreen extends StatefulWidget {
   const ConfiguracionScreen({super.key});
 
   @override
+  State<ConfiguracionScreen> createState() => _ConfiguracionScreenState();
+}
+
+class _ConfiguracionScreenState extends State<ConfiguracionScreen> with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
   Widget build(BuildContext context) {
+    super.build(context); // Necesario para AutomaticKeepAliveClientMixin
     return Scaffold(
       body: ListView(
         padding: const EdgeInsets.all(16.0),

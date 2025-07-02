@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'package:intl/intl.dart';
-import 'package:intl/date_symbol_data_local.dart';
-import '../utils/formato_moneda.dart';
 
 import '../database/repositories/caja_repository.dart';
 import '../database/repositories/transaccion_repository.dart';
@@ -39,7 +37,6 @@ class ReportesScreenState extends State<ReportesScreen>
   @override
   void initState() {
     super.initState();
-    initializeDateFormatting('es');
     _cargarDatos();
     _cajaEventsSubscription = CajaEvents().stream.listen((event) {
       _cargarDatos();
@@ -59,6 +56,7 @@ class ReportesScreenState extends State<ReportesScreen>
       _cajaAbierta = await _cajaRepository.getCajaAbierta();
 
       if (_cajaAbierta != null) {
+        // Usar el rango de la sesión actual de caja
         final desde = _cajaAbierta!.fechaApertura;
         final hasta = _cajaAbierta!.fechaCierre ?? DateTime.now();
         _transaccionesHoy = await _transaccionRepository
@@ -108,13 +106,10 @@ class ReportesScreenState extends State<ReportesScreen>
             style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
           ),
           SizedBox(height: 8),
-          Padding(
-            padding: EdgeInsets.symmetric(horizontal: 32.0),
-            child: Text(
-              'Para ver los reportes, abre una caja desde la pantalla de Inicio.',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey),
-            ),
+          Text(
+            'Para ver los reportes, abre una caja desde la pantalla de Inicio.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.grey),
           ),
         ],
       ),
@@ -201,7 +196,7 @@ class ReportesScreenState extends State<ReportesScreen>
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text('Monto Inicial:'),
-                Text(FormatoMoneda.formatear(_cajaAbierta!.montoInicial)),
+                Text('₲${_cajaAbierta!.montoInicial.toStringAsFixed(0)}'),
               ],
             ),
             if (_cajaAbierta?.montoFinal != null) ...[
@@ -210,7 +205,7 @@ class ReportesScreenState extends State<ReportesScreen>
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text('Monto Final:'),
-                  Text(FormatoMoneda.formatear(_cajaAbierta!.montoFinal!)),
+                  Text('₲${_cajaAbierta!.montoFinal!.toStringAsFixed(0)}'),
                 ],
               ),
             ],
@@ -236,21 +231,21 @@ class ReportesScreenState extends State<ReportesScreen>
             const SizedBox(height: 8),
             _buildItemResumen(
               'Efectivo:',
-              FormatoMoneda.formatear(_resumenHoy['totalEfectivo'] ?? 0),
+              '₲${_resumenHoy['totalEfectivo']?.toStringAsFixed(0) ?? '0'}',
               Icons.money,
               Colors.green,
             ),
             const SizedBox(height: 8),
             _buildItemResumen(
               'Transferencia:',
-              FormatoMoneda.formatear(_resumenHoy['totalTransferencia'] ?? 0),
+              '₲${_resumenHoy['totalTransferencia']?.toStringAsFixed(0) ?? '0'}',
               Icons.account_balance_wallet,
               Colors.blue,
             ),
             const SizedBox(height: 8),
             _buildItemResumen(
               'Total General:',
-              FormatoMoneda.formatear(_resumenHoy['totalGeneral'] ?? 0),
+              '₲${_resumenHoy['totalGeneral']?.toStringAsFixed(0) ?? '0'}',
               Icons.attach_money,
               Colors.purple,
               isTotal: true,
@@ -269,9 +264,9 @@ class ReportesScreenState extends State<ReportesScreen>
   }
 
   Widget _buildItemResumen(
-    String titulo,
-    String valor,
-    IconData icono,
+    String title,
+    String value,
+    IconData icon,
     Color color, {
     bool isTotal = false,
   }) {
@@ -284,10 +279,10 @@ class ReportesScreenState extends State<ReportesScreen>
       ),
       child: Row(
         children: [
-          Icon(icono, color: color, size: 20),
+          Icon(icon, color: color, size: 20),
           const SizedBox(width: 12),
           Text(
-            titulo,
+            title,
             style: TextStyle(
               fontSize: 16,
               fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
@@ -295,7 +290,7 @@ class ReportesScreenState extends State<ReportesScreen>
           ),
           const Spacer(),
           Text(
-            valor,
+            value,
             style: TextStyle(
               fontSize: 16,
               fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
@@ -312,7 +307,7 @@ class ReportesScreenState extends State<ReportesScreen>
       return const Card(
         child: Padding(
           padding: EdgeInsets.all(16.0),
-          child: Text('No hay transacciones registradas.'),
+          child: Text('No hay transacciones registradas hoy.'),
         ),
       );
     }
@@ -358,10 +353,7 @@ class ReportesScreenState extends State<ReportesScreen>
                   style: const TextStyle(fontWeight: FontWeight.w500),
                 ),
                 subtitle: Text(
-                  DateFormat(
-                    'dd/MM/yyyy HH:mm',
-                    'es',
-                  ).format(transaccion.fechaHora),
+                  DateFormat('dd/MM/yyyy HH:mm').format(transaccion.fechaHora),
                 ),
                 trailing: Text(
                   '₲${transaccion.montoTotal.toStringAsFixed(0)}',

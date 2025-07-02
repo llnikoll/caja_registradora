@@ -51,6 +51,8 @@ dependencies:
   
   # Para abrir enlaces externos
   url_launcher: ^6.2.5
+  fl_chart: ^1.0.0
+  share_plus: ^11.0.0
 
 dev_dependencies:
   flutter_test:

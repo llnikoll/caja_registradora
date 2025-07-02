@@ -1,8 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-class AyudaScreen extends StatelessWidget {
+class AyudaScreen extends StatefulWidget {
   const AyudaScreen({super.key});
+
+  @override
+  State<AyudaScreen> createState() => _AyudaScreenState();
+}
+
+class _AyudaScreenState extends State<AyudaScreen> with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
 
   Future<void> _launchURL(String url) async {
     final Uri uri = Uri.parse(url);
@@ -13,6 +21,7 @@ class AyudaScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // Necesario para AutomaticKeepAliveClientMixin
     return Scaffold(
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
