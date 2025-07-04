@@ -138,7 +138,7 @@ class _VentasScreenState extends State<VentasScreen>
                         ? Colors.green
                         : Colors.blue,
                   ),
-                  title: Text('${t.nombreCliente ?? 'Sin nombre'}'),
+                  title: Text(t.nombreCliente ?? 'Sin nombre'),
                   subtitle: Text(_dateFormat.format(t.fechaHora)),
                   trailing: Text(
                     _formatearMonto(t.montoTotal),

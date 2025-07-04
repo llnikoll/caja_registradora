@@ -122,7 +122,7 @@ class _VentasHistorialScreenState extends State<VentasHistorialScreen> {
                         ? Colors.green
                         : Colors.blue,
                   ),
-                  title: Text('${t.nombreCliente ?? 'Sin nombre'}'),
+                  title: Text(t.nombreCliente ?? 'Sin nombre'),
                   subtitle: Text(t.fechaFormateada),
                   trailing: Text(
                     t.montoFormateado,
