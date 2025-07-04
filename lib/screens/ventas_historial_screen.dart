@@ -98,9 +98,7 @@ class _VentasHistorialScreenState extends State<VentasHistorialScreen> {
           const Divider(),
           Text('Monto Inicial: ${caja.montoInicialFormateado}'),
           Text('Total Efectivo: ${_formatearMonto(totalEfectivo)}'),
-          Text(
-            'Total Transferencia: ${_formatearMonto(totalTransferencia)}',
-          ),
+          Text('Total Transferencia: ${_formatearMonto(totalTransferencia)}'),
           Text(
             'Total Sesión: ${_formatearMonto(caja.montoInicial + totalEfectivo + totalTransferencia)}',
           ),
@@ -124,9 +122,7 @@ class _VentasHistorialScreenState extends State<VentasHistorialScreen> {
                         ? Colors.green
                         : Colors.blue,
                   ),
-                  title: Text(
-                    '${t.nombreCliente ?? 'Sin nombre'} - ${t.numeroTransaccion}',
-                  ),
+                  title: Text('${t.nombreCliente ?? 'Sin nombre'}'),
                   subtitle: Text(t.fechaFormateada),
                   trailing: Text(
                     t.montoFormateado,

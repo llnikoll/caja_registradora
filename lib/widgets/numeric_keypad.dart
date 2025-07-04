@@ -8,6 +8,8 @@ class NumericKeypad extends StatelessWidget {
   final VoidCallback onEqualsPressed;
   final Function(String) onOperationPressed;
   final bool showOperations;
+  final List<int> quickAmounts;
+  final void Function(int) onQuickAmountPressed;
 
   // Available operations
   static const List<Map<String, dynamic>> operations = [
@@ -25,18 +27,28 @@ class NumericKeypad extends StatelessWidget {
     required this.onEqualsPressed,
     required this.onOperationPressed,
     this.showOperations = true,
+    this.quickAmounts = const [15000, 18000, 20000],
+    required this.onQuickAmountPressed,
   });
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
     return Container(
       padding: const EdgeInsets.all(8.0),
       decoration: BoxDecoration(
-        color: Colors.grey[100],
+        color: colorScheme.surface,
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: const Color.fromRGBO(0, 0, 0, 0.1),
+            color: Color.fromRGBO(
+              (colorScheme.shadow.r * 255.0).round() & 0xff,
+              (colorScheme.shadow.g * 255.0).round() & 0xff,
+              (colorScheme.shadow.b * 255.0).round() & 0xff,
+              0.1,
+            ),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -57,24 +69,32 @@ class NumericKeypad extends StatelessWidget {
                 child: Row(
                   children: [
                     _buildButton(
+                      context,
                       '7',
                       fontSize,
                       iconSize,
                       onPressed: () => onNumberPressed('7'),
                     ),
                     _buildButton(
+                      context,
                       '8',
                       fontSize,
                       iconSize,
                       onPressed: () => onNumberPressed('8'),
                     ),
                     _buildButton(
+                      context,
                       '9',
                       fontSize,
                       iconSize,
                       onPressed: () => onNumberPressed('9'),
                     ),
-                    _buildOperationButton(operations[0], fontSize, iconSize),
+                    _buildOperationButton(
+                      context,
+                      operations[0],
+                      fontSize,
+                      iconSize,
+                    ),
                   ],
                 ),
               ),
@@ -84,24 +104,32 @@ class NumericKeypad extends StatelessWidget {
                 child: Row(
                   children: [
                     _buildButton(
+                      context,
                       '4',
                       fontSize,
                       iconSize,
                       onPressed: () => onNumberPressed('4'),
                     ),
                     _buildButton(
+                      context,
                       '5',
                       fontSize,
                       iconSize,
                       onPressed: () => onNumberPressed('5'),
                     ),
                     _buildButton(
+                      context,
                       '6',
                       fontSize,
                       iconSize,
                       onPressed: () => onNumberPressed('6'),
                     ),
-                    _buildOperationButton(operations[1], fontSize, iconSize),
+                    _buildOperationButton(
+                      context,
+                      operations[1],
+                      fontSize,
+                      iconSize,
+                    ),
                   ],
                 ),
               ),
@@ -111,24 +139,32 @@ class NumericKeypad extends StatelessWidget {
                 child: Row(
                   children: [
                     _buildButton(
+                      context,
                       '1',
                       fontSize,
                       iconSize,
                       onPressed: () => onNumberPressed('1'),
                     ),
                     _buildButton(
+                      context,
                       '2',
                       fontSize,
                       iconSize,
                       onPressed: () => onNumberPressed('2'),
                     ),
                     _buildButton(
+                      context,
                       '3',
                       fontSize,
                       iconSize,
                       onPressed: () => onNumberPressed('3'),
                     ),
-                    _buildOperationButton(operations[2], fontSize, iconSize),
+                    _buildOperationButton(
+                      context,
+                      operations[2],
+                      fontSize,
+                      iconSize,
+                    ),
                   ],
                 ),
               ),
@@ -138,48 +174,63 @@ class NumericKeypad extends StatelessWidget {
                 child: Row(
                   children: [
                     _buildButton(
+                      context,
                       'C',
                       fontSize,
                       iconSize,
-                      color: Colors.red[50],
-                      textColor: Colors.red,
+                      color: colorScheme.errorContainer,
+                      textColor: colorScheme.onErrorContainer,
                       onPressed: onClearAll,
                     ),
                     _buildButton(
+                      context,
                       '0',
                       fontSize,
                       iconSize,
                       onPressed: () => onNumberPressed('0'),
                     ),
                     _buildButton(
+                      context,
                       '.',
                       fontSize,
                       iconSize,
                       onPressed: onDecimalPressed,
                     ),
                     _buildButton(
+                      context,
                       '=',
                       fontSize,
                       iconSize,
-                      color: Colors.blue,
-                      textColor: Colors.white,
+                      color: colorScheme.primary,
+                      textColor: colorScheme.onPrimary,
                       onPressed: onEqualsPressed,
                     ),
                   ],
                 ),
               ),
-              // Row 5: Delete (backspace)
+              // Row 5: Quick Amounts + Delete (backspace)
               if (showOperations) ...[
                 const SizedBox(height: 8),
                 Expanded(
                   child: Row(
                     children: [
+                      for (final amount in quickAmounts)
+                        _buildButton(
+                          context,
+                          '₲${amount.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')}',
+                          fontSize * 0.9,
+                          iconSize * 0.9,
+                          color: colorScheme.tertiaryContainer,
+                          textColor: colorScheme.onTertiaryContainer,
+                          onPressed: () => onQuickAmountPressed(amount),
+                        ),
                       _buildButton(
+                        context,
                         '⌫',
                         fontSize,
                         iconSize,
-                        color: Colors.orange[50],
-                        textColor: Colors.orange,
+                        color: colorScheme.secondaryContainer,
+                        textColor: colorScheme.onSecondaryContainer,
                         onPressed: onClear,
                       ),
                     ],
@@ -194,21 +245,25 @@ class NumericKeypad extends StatelessWidget {
   }
 
   Widget _buildOperationButton(
+    BuildContext context,
     Map<String, dynamic> operation,
     double fontSize,
     double iconSize,
   ) {
+    final colorScheme = Theme.of(context).colorScheme;
     return _buildButton(
+      context,
       operation['symbol'] as String,
       fontSize,
       iconSize,
-      color: Colors.blue[50],
-      textColor: Colors.blue,
+      color: colorScheme.primaryContainer,
+      textColor: colorScheme.onPrimaryContainer,
       onPressed: () => onOperationPressed(operation['symbol'] as String),
     );
   }
 
   Widget _buildButton(
+    BuildContext context,
     String text,
     double fontSize,
     double iconSize, {
@@ -216,11 +271,12 @@ class NumericKeypad extends StatelessWidget {
     Color? textColor,
     VoidCallback? onPressed,
   }) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Expanded(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 2.0),
         child: Material(
-          color: color ?? Colors.white,
+          color: color ?? colorScheme.surface,
           borderRadius: BorderRadius.circular(8),
           elevation: 2,
           child: InkWell(
@@ -233,7 +289,7 @@ class NumericKeypad extends StatelessWidget {
                 style: TextStyle(
                   fontSize: fontSize,
                   fontWeight: FontWeight.w500,
-                  color: textColor ?? Colors.black87,
+                  color: textColor ?? colorScheme.onSurface,
                 ),
               ),
             ),

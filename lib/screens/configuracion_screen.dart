@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../providers/empresa_provider.dart';
+import '../providers/quick_amounts_provider.dart';
+import '../providers/theme_provider.dart';
 
 class ConfiguracionScreen extends StatefulWidget {
   const ConfiguracionScreen({super.key});
@@ -11,12 +14,65 @@ class ConfiguracionScreen extends StatefulWidget {
 
 class _ConfiguracionScreenState extends State<ConfiguracionScreen>
     with AutomaticKeepAliveClientMixin {
+  final _quickAmount1Controller = TextEditingController();
+  final _quickAmount2Controller = TextEditingController();
+  final _quickAmount3Controller = TextEditingController();
+
   @override
   bool get wantKeepAlive => true;
 
   @override
+  void initState() {
+    super.initState();
+    _loadQuickAmounts();
+  }
+
+  @override
+  void dispose() {
+    _quickAmount1Controller.dispose();
+    _quickAmount2Controller.dispose();
+    _quickAmount3Controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadQuickAmounts() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _quickAmount1Controller.text = (prefs.getInt('quick_amount_1') ?? 15000)
+          .toString();
+      _quickAmount2Controller.text = (prefs.getInt('quick_amount_2') ?? 18000)
+          .toString();
+      _quickAmount3Controller.text = (prefs.getInt('quick_amount_3') ?? 20000)
+          .toString();
+    });
+  }
+
+  Future<void> _saveQuickAmounts() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(
+      'quick_amount_1',
+      int.tryParse(_quickAmount1Controller.text) ?? 15000,
+    );
+    await prefs.setInt(
+      'quick_amount_2',
+      int.tryParse(_quickAmount2Controller.text) ?? 18000,
+    );
+    await prefs.setInt(
+      'quick_amount_3',
+      int.tryParse(_quickAmount3Controller.text) ?? 20000,
+    );
+    if (mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Montos rápidos guardados')));
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     super.build(context); // Necesario para AutomaticKeepAliveClientMixin
+    final quickProvider = Provider.of<QuickAmountsProvider>(context);
+    final themeProvider = Provider.of<ThemeProvider>(context);
     final empresa = Provider.of<EmpresaProvider>(context);
     return Scaffold(
       body: ListView(
@@ -48,30 +104,59 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen>
             child: Column(
               children: [
                 ListTile(
-                  leading: const Icon(Icons.store),
-                  title: const Text('Datos del Negocio'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () {
-                    // Navegar a configuración de negocio
-                  },
-                ),
-                const Divider(height: 1),
-                ListTile(
-                  leading: const Icon(Icons.receipt),
-                  title: const Text('Configuración de Facturación'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () {
-                    // Navegar a configuración de facturación
-                  },
-                ),
-                const Divider(height: 1),
-                ListTile(
-                  leading: const Icon(Icons.payment),
-                  title: const Text('Métodos de Pago'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () {
-                    // Navegar a configuración de métodos de pago
-                  },
+                  leading: const Icon(Icons.flash_on),
+                  title: const Text('Montos rápidos del teclado'),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _quickAmount1Controller,
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(
+                                labelText: 'Monto 1',
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: TextField(
+                              controller: _quickAmount2Controller,
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(
+                                labelText: 'Monto 2',
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: TextField(
+                              controller: _quickAmount3Controller,
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(
+                                labelText: 'Monto 3',
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: ElevatedButton.icon(
+                          icon: const Icon(Icons.save),
+                          label: const Text('Guardar'),
+                          onPressed: () async {
+                            await _saveQuickAmounts();
+                            await quickProvider.loadFromPrefs();
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -83,27 +168,9 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen>
                 SwitchListTile(
                   title: const Text('Modo Oscuro'),
                   secondary: const Icon(Icons.dark_mode),
-                  value: false,
+                  value: themeProvider.isDarkMode,
                   onChanged: (bool value) {
-                    // Implementar cambio de tema
-                  },
-                ),
-                const Divider(height: 1),
-                ListTile(
-                  leading: const Icon(Icons.language),
-                  title: const Text('Idioma'),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'Español',
-                        style: TextStyle(color: Colors.grey[600]),
-                      ),
-                      const Icon(Icons.chevron_right),
-                    ],
-                  ),
-                  onTap: () {
-                    // Navegar a selección de idioma
+                    themeProvider.setDarkMode(value);
                   },
                 ),
               ],

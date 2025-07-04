@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../widgets/numeric_keypad.dart';
 import '../database/repositories/transaccion_repository.dart'; // Import the repository
 import '../models/transaccion.dart'; // Import the model
 import '../database/repositories/caja_repository.dart'; // Import CajaRepository
 import '../services/caja_events.dart';
 import '../utils/formato_moneda.dart';
+import '../providers/quick_amounts_provider.dart';
 
 enum PaymentType { cash, bank }
 
@@ -15,7 +17,8 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMixin {
+class _HomeScreenState extends State<HomeScreen>
+    with AutomaticKeepAliveClientMixin {
   @override
   bool get wantKeepAlive => true;
   String _display = '0';
@@ -55,9 +58,32 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
     }
   }
 
+  // Historial de montos rápidos agregados para poder borrarlos
+  final List<int> _quickAmountHistory = [];
+
+  void _onQuickAmountPressed(int amount) {
+    setState(() {
+      final currentValue = double.tryParse(_currentInput) ?? 0;
+      final newValue = currentValue + amount;
+      _currentInput = newValue.toStringAsFixed(0);
+      _total = newValue.toDouble();
+      _quickAmountHistory.add(amount);
+      _updateDisplay();
+    });
+  }
+
   void _onClear() {
     setState(() {
-      if (_currentInput.isNotEmpty) {
+      if (_quickAmountHistory.isNotEmpty) {
+        // Si el último fue un monto rápido, lo restamos
+        final lastQuick = _quickAmountHistory.removeLast();
+        final currentValue = double.tryParse(_currentInput) ?? 0;
+        final newValue = (currentValue - lastQuick).clamp(0, double.infinity);
+        _currentInput = newValue == 0 ? '' : newValue.toStringAsFixed(0);
+        _total = newValue.toDouble();
+        _updateDisplay();
+      } else if (_currentInput.isNotEmpty) {
+        // Si no, borrado normal
         _currentInput = _currentInput.substring(0, _currentInput.length - 1);
         if (_currentInput.isEmpty) _currentInput = '0';
         _updateDisplay();
@@ -72,6 +98,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
       _firstOperand = null;
       _pendingOperation = null;
       _total = 0.0;
+      _quickAmountHistory.clear(); // Limpiar historial al borrar todo
     });
   }
 
@@ -135,7 +162,16 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
       _firstOperand = null;
       _pendingOperation = null;
       _updateDisplay();
-    } else if (_currentInput.isNotEmpty) {}
+    } else if (_currentInput.isNotEmpty) {
+      // Si no hay operación pendiente pero hay un número ingresado,
+      // tomar ese número como el total
+      final currentValue = double.tryParse(_currentInput) ?? 0;
+      _total = currentValue;
+      _currentInput = currentValue.toString();
+      _firstOperand = null;
+      _pendingOperation = null;
+      _updateDisplay();
+    }
 
     // Show payment type selection dialog
     final screenSize = MediaQuery.of(context).size;
@@ -302,14 +338,20 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                       style: const TextStyle(fontSize: 16),
                       onChanged: (value) {
                         // Obtener posición actual del cursor
-                        final cursorPos = _amountController.selection.baseOffset;
-                        
+                        final cursorPos =
+                            _amountController.selection.baseOffset;
+
                         // Limpiar el valor, mantener solo dígitos
-                        final cleanValue = value.replaceAll(RegExp(r'[^\d]'), '');
-                        
+                        final cleanValue = value.replaceAll(
+                          RegExp(r'[^\d]'),
+                          '',
+                        );
+
                         // Actualizar el valor numérico
-                        receivedAmountValue = cleanValue.isEmpty ? 0 : double.parse(cleanValue);
-                        
+                        receivedAmountValue = cleanValue.isEmpty
+                            ? 0
+                            : double.parse(cleanValue);
+
                         // Formatear con puntos como separadores de miles
                         String formatted = '';
                         if (cleanValue.isNotEmpty) {
@@ -319,7 +361,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                             (Match m) => '${m[1]}.',
                           );
                         }
-                        
+
                         // Calcular nueva posición del cursor
                         int newCursorPos = cursorPos;
                         if (value.length < formatted.length) {
@@ -329,16 +371,18 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                           // Se eliminó un punto
                           newCursorPos -= (value.length - formatted.length);
                         }
-                        
+
                         // Asegurar que la posición sea válida
                         newCursorPos = newCursorPos.clamp(0, formatted.length);
-                        
+
                         // Actualizar el controlador
                         _amountController.value = TextEditingValue(
                           text: formatted,
-                          selection: TextSelection.collapsed(offset: newCursorPos),
+                          selection: TextSelection.collapsed(
+                            offset: newCursorPos,
+                          ),
                         );
-                        
+
                         // Actualizar el estado
                         setState(() {});
                       },
@@ -383,12 +427,20 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
               ),
               ElevatedButton(
                 onPressed: () {
-                  if (receivedAmountValue >= _total) {
+                  // Si el campo de monto recibido está vacío, asumir pago justo.
+                  // Si no está vacío, validar que el monto sea suficiente.
+                  if (_amountController.text.isEmpty ||
+                      receivedAmountValue >= _total) {
+                    final double finalReceivedAmount =
+                        _amountController.text.isEmpty
+                        ? _total
+                        : receivedAmountValue;
                     Navigator.pop(context, {
-                      'amount': receivedAmountValue,
+                      'amount': finalReceivedAmount,
                       'clientName': clientNameController.text,
                     });
                   } else {
+                    // Mostrar error si se ingresó un monto insuficiente
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text(
@@ -635,9 +687,9 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
   String _formatInput(String value, {bool format = false}) {
     // Solo permitir dígitos
     String digits = value.replaceAll(RegExp(r'[^\d]'), '');
-    
+
     if (!format || digits.isEmpty) return digits;
-    
+
     // Formatear con puntos como separadores de miles
     String formatted = '';
     for (int i = 0; i < digits.length; i++) {
@@ -646,14 +698,14 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
       }
       formatted += digits[i];
     }
-    
+
     return formatted;
   }
 
   Future<bool> _promptAbrirCaja() async {
     final montoController = TextEditingController();
     final formKey = GlobalKey<FormState>();
-    
+
     // Variable para mantener el valor numérico real
     double montoReal = 0;
 
@@ -679,13 +731,13 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
             onChanged: (value) {
               // Obtener la posición actual del cursor
               final cursorPos = montoController.selection.baseOffset;
-              
+
               // Obtener solo los dígitos
               final cleanValue = _formatInput(value);
-              
+
               // Formatear con puntos
               final formattedValue = _formatInput(cleanValue, format: true);
-              
+
               // Calcular la nueva posición del cursor
               int newCursorPos = cursorPos;
               if (value.length < formattedValue.length) {
@@ -695,16 +747,16 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                 // Se eliminó un punto
                 newCursorPos -= (value.length - formattedValue.length);
               }
-              
+
               // Asegurar que la posición del cursor sea válida
               newCursorPos = newCursorPos.clamp(0, formattedValue.length);
-              
+
               // Actualizar el controlador con el valor formateado
               montoController.value = TextEditingValue(
                 text: formattedValue,
                 selection: TextSelection.collapsed(offset: newCursorPos),
               );
-              
+
               // Actualizar el valor numérico real (sin formato)
               montoReal = double.tryParse(cleanValue) ?? 0.0;
             },
@@ -712,18 +764,18 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
               if (value == null || value.isEmpty) {
                 return 'Por favor ingrese un monto';
               }
-              
+
               final cleanValue = _formatInput(value);
               final numericValue = double.tryParse(cleanValue);
-              
+
               if (numericValue == null) {
                 return 'Ingrese un monto válido';
               }
-              
+
               if (numericValue <= 0) {
                 return 'El monto debe ser mayor a cero';
               }
-              
+
               return null;
             },
           ),
@@ -740,15 +792,15 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
               // Capture values needed after async gap
               final currentMounted = mounted;
               if (!currentMounted) return;
-              
+
               final scaffoldMessenger = ScaffoldMessenger.of(context);
               final navigator = Navigator.of(dialogContext);
-              
+
               try {
                 // Usar el valor numérico real que ya tenemos
                 await _cajaRepository.abrirCaja(montoReal);
                 CajaEvents().notificar(CajaStateEvent.abierta);
-                
+
                 navigator.pop(true);
                 scaffoldMessenger.showSnackBar(
                   const SnackBar(content: Text('Caja abierta exitosamente')),
@@ -841,7 +893,6 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
   @override
   void initState() {
     super.initState();
-    // Inicializar con el teclado numérico listo para usar
     _onClearAll();
   }
 
@@ -879,6 +930,8 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
   @override
   Widget build(BuildContext context) {
     super.build(context); // Necesario para AutomaticKeepAliveClientMixin
+    final quickProvider = Provider.of<QuickAmountsProvider>(context);
+    final quickAmounts = quickProvider.amounts;
     // Return only the body content
     return SafeArea(
       child: Column(
@@ -934,6 +987,8 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                 onClearAll: _onClearAll,
                 onEqualsPressed: _onSubmit,
                 onOperationPressed: _onOperationPressed,
+                quickAmounts: quickAmounts,
+                onQuickAmountPressed: _onQuickAmountPressed,
               ),
             ),
           ),

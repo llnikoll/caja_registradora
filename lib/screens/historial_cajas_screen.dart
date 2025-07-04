@@ -370,9 +370,7 @@ class _HistorialCajasScreenState extends State<HistorialCajasScreen> {
                             ? Colors.green
                             : Colors.blue,
                       ),
-                      title: Text(
-                        '${t.nombreCliente ?? 'Sin nombre'} - ${t.numeroTransaccion}',
-                      ),
+                      title: Text('${t.nombreCliente ?? 'Sin nombre'}'),
                       subtitle: Text(t.fechaFormateada),
                       trailing: Text(
                         t.montoFormateado,
@@ -486,14 +484,14 @@ class _HistorialCajasScreenState extends State<HistorialCajasScreen> {
           ElevatedButton(
             onPressed: () async {
               if (!formKey.currentState!.validate()) return;
-              
+
               // Capture values needed after async gap
               final currentMounted = mounted;
               if (!currentMounted) return;
-              
+
               final scaffoldMessenger = ScaffoldMessenger.of(dialogContext);
               final navigator = Navigator.of(dialogContext);
-              
+
               try {
                 final montoFinal = double.parse(montoController.text);
                 await _cajaRepository.cerrarCaja(montoFinal);

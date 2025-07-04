@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 import 'database/database_helper.dart';
 import 'providers/cart_provider.dart';
 import 'providers/empresa_provider.dart'; // Import the EmpresaProvider
+import 'providers/quick_amounts_provider.dart';
+import 'providers/theme_provider.dart'; // Import ThemeProvider
 import 'widgets/main_layout.dart'; // Import the new MainLayout
 import 'restart_widget.dart';
 
@@ -23,6 +25,10 @@ void main() async {
           ChangeNotifierProvider(
             create: (context) => EmpresaProvider(),
           ), // Add EmpresaProvider
+          ChangeNotifierProvider(create: (context) => QuickAmountsProvider()),
+          ChangeNotifierProvider(
+            create: (context) => ThemeProvider(),
+          ), // Add ThemeProvider
           // Aquí podrías agregar más providers si es necesario
         ],
         child: const CajaRegistradoraApp(),
@@ -36,6 +42,7 @@ class CajaRegistradoraApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
     return MaterialApp(
       title: 'Caja Registradora',
       debugShowCheckedModeBanner: false,
@@ -46,6 +53,14 @@ class CajaRegistradoraApp extends StatelessWidget {
         ),
         useMaterial3: true,
       ),
+      darkTheme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Colors.blue,
+          brightness: Brightness.dark,
+        ),
+        useMaterial3: true,
+      ),
+      themeMode: themeProvider.isDarkMode ? ThemeMode.dark : ThemeMode.light,
       // Use MainLayout as the home widget
       home: const MainLayout(),
       // Remove initialRoute and routes as navigation is handled in MainLayout

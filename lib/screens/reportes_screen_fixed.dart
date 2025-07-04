@@ -349,7 +349,7 @@ class ReportesScreenState extends State<ReportesScreen>
                   ),
                 ),
                 title: Text(
-                  'Transacción #${transaccion.numeroTransaccion}',
+                  'Transacción',
                   style: const TextStyle(fontWeight: FontWeight.w500),
                 ),
                 subtitle: Text(
