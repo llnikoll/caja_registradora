@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../screens/home_screen.dart';
 import '../screens/reportes_screen.dart';
 import '../screens/ventas_screen.dart';
@@ -9,6 +10,7 @@ import '../database/repositories/transaccion_repository.dart';
 import '../models/caja.dart';
 import 'cierre_caja_dialog.dart';
 import '../restart_widget.dart';
+import '../providers/empresa_provider.dart';
 
 class MainLayout extends StatefulWidget {
   const MainLayout({super.key});
@@ -329,28 +331,7 @@ class _MainLayoutState extends State<MainLayout> {
       child: ListView(
         padding: EdgeInsets.zero,
         children: [
-          const DrawerHeader(
-            decoration: BoxDecoration(color: Colors.blue),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                Text(
-                  'Caja Registradora',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                SizedBox(height: 8),
-                Text(
-                  'Versión 1.0.0',
-                  style: TextStyle(color: Colors.white70, fontSize: 14),
-                ),
-              ],
-            ),
-          ),
+          CompanyDrawerHeader(), // Use custom header
           ListTile(
             leading: const Icon(Icons.home),
             title: const Text('Inicio'),
@@ -391,6 +372,59 @@ class _MainLayoutState extends State<MainLayout> {
             onTap: () => _onItemTapped(4),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// Custom Drawer Header widget
+class CompanyDrawerHeader extends StatelessWidget {
+  const CompanyDrawerHeader({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<EmpresaProvider>(
+      builder: (context, empresa, _) => Container(
+        height: 100, // Reduced height to decrease extra space
+        decoration: BoxDecoration(color: empresa.iconColor),
+        padding: const EdgeInsets.symmetric(
+          horizontal: 16.0,
+          vertical: 8.0, // Adjusted vertical padding
+        ),
+        child: Column(
+          crossAxisAlignment:
+              CrossAxisAlignment.start, // Explicitly set cross alignment
+          mainAxisAlignment:
+              MainAxisAlignment.end, // Align content to the bottom
+          children: [
+            CircleAvatar(
+              radius: 20, // Keep radius
+              backgroundColor: Colors.white,
+              child: Icon(
+                empresa.iconData,
+                size: 26,
+                color: empresa.iconColor,
+              ), // Keep size
+            ),
+            const SizedBox(height: 4), // Keep spacing
+            Text(
+              'Caja Registradora',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 15, // Keep font size
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 1), // Keep spacing
+            const Text(
+              'Versión 1.0.0',
+              style: TextStyle(
+                color: Colors.white70,
+                fontSize: 10,
+              ), // Keep font size
+            ),
+          ],
+        ),
       ),
     );
   }

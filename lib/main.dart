@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import 'database/database_helper.dart';
 import 'providers/cart_provider.dart';
+import 'providers/empresa_provider.dart'; // Import the EmpresaProvider
 import 'widgets/main_layout.dart'; // Import the new MainLayout
 import 'restart_widget.dart';
 
@@ -19,6 +20,9 @@ void main() async {
       child: MultiProvider(
         providers: [
           ChangeNotifierProvider(create: (context) => CartProvider()),
+          ChangeNotifierProvider(
+            create: (context) => EmpresaProvider(),
+          ), // Add EmpresaProvider
           // Aquí podrías agregar más providers si es necesario
         ],
         child: const CajaRegistradoraApp(),
