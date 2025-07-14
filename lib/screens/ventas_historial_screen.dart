@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import '../database/repositories/caja_repository.dart';
-import '../database/repositories/transaccion_repository.dart';
+import 'package:provider/provider.dart';
 import '../models/caja.dart';
 import '../models/transaccion.dart';
 import '../utils/formato_moneda.dart';
+import '../providers/sales_history_provider.dart'; // Import the new provider
 
 class VentasHistorialScreen extends StatefulWidget {
   const VentasHistorialScreen({super.key});
@@ -13,24 +13,11 @@ class VentasHistorialScreen extends StatefulWidget {
 }
 
 class _VentasHistorialScreenState extends State<VentasHistorialScreen> {
-  final CajaRepository _cajaRepository = CajaRepository();
-  final TransaccionRepository _transaccionRepository = TransaccionRepository();
-  List<Caja> _cajas = [];
-  bool _isLoading = true;
-
   @override
   void initState() {
     super.initState();
-    _cargarCajas();
-  }
-
-  Future<void> _cargarCajas() async {
-    setState(() => _isLoading = true);
-    final cajas = await _cajaRepository.getHistorialCajas();
-    setState(() {
-      _cajas = cajas;
-      _isLoading = false;
-    });
+    // Load data using the provider
+    Provider.of<SalesHistoryProvider>(context, listen: false).loadSalesHistory();
   }
 
   String _formatearMonto(double monto) {
@@ -39,36 +26,40 @@ class _VentasHistorialScreenState extends State<VentasHistorialScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final salesHistoryProvider = Provider.of<SalesHistoryProvider>(context);
+
     return Scaffold(
       appBar: AppBar(title: const Text('Historial de Ventas por Sesión')),
-      body: _isLoading
+      body: salesHistoryProvider.isLoading
           ? const Center(child: CircularProgressIndicator())
-          : ListView.builder(
-              itemCount: _cajas.length,
-              itemBuilder: (context, index) {
-                final caja = _cajas[index];
-                return ListTile(
-                  title: Text(
-                    'Caja #${caja.id} - ${caja.fechaAperturaFormateada}',
-                  ),
-                  subtitle: Text(caja.estaAbierta ? 'Abierta' : 'Cerrada'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () async {
-                    final transacciones = await _transaccionRepository
-                        .getTransaccionesPorRangoFechas(
-                          caja.fechaApertura,
-                          caja.fechaCierre ?? DateTime.now(),
+          : salesHistoryProvider.cajas.isEmpty
+              ? const Center(child: Text('No hay sesiones de caja registradas'))
+              : ListView.builder(
+                  itemCount: salesHistoryProvider.cajas.length,
+                  itemBuilder: (context, index) {
+                    final caja = salesHistoryProvider.cajas[index];
+                    return ListTile(
+                      title: Text(
+                        'Caja #${caja.id} - ${caja.fechaAperturaFormateada}',
+                      ),
+                      subtitle: Text(caja.estaAbierta ? 'Abierta' : 'Cerrada'),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () async {
+                        final transacciones = await salesHistoryProvider
+                            .getTransactionsForCaja(
+                                caja.fechaApertura,
+                                caja.fechaCierre,
+                              );
+                        if (!mounted) return;
+                        showModalBottomSheet(
+                          context: this.context,
+                          isScrollControlled: true,
+                          builder: (_) => _buildDetalleSesion(caja, transacciones),
                         );
-                    if (!mounted) return;
-                    showModalBottomSheet(
-                      context: this.context,
-                      isScrollControlled: true,
-                      builder: (_) => _buildDetalleSesion(caja, transacciones),
+                      },
                     );
                   },
-                );
-              },
-            ),
+                ),
     );
   }
 

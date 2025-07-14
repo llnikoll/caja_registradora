@@ -1,3 +1,4 @@
+import 'package:caja_registradora/services/caja_events.dart';
 import 'package:sqflite/sqflite.dart';
 import '../database_helper.dart';
 import '../../models/transaccion.dart';
@@ -8,11 +9,13 @@ class TransaccionRepository {
   // Insertar una nueva transacción
   Future<int> insertTransaccion(Transaccion transaccion) async {
     final db = await _databaseHelper.database;
-    return await db.insert(
+    final id = await db.insert(
       DatabaseHelper.tableTransacciones,
       transaccion.toMap(),
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
+    CajaEvents().notificar(CajaStateEvent.transaccionRealizada);
+    return id;
   }
 
   // Obtener todas las transacciones

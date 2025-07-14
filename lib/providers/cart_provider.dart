@@ -15,7 +15,7 @@ class CartProvider with ChangeNotifier {
     final existingIndex = _items.indexWhere((item) => item.id == product.id);
     
     if (existingIndex >= 0) {
-      _items[existingIndex].quantity++;
+      _items[existingIndex] = _items[existingIndex].copyWith(quantity: _items[existingIndex].quantity + 1);
     } else {
       _items.add(product);
     }
@@ -33,9 +33,11 @@ class CartProvider with ChangeNotifier {
   void updateProductQuantity(String id, int quantity) {
     final index = _items.indexWhere((item) => item.id == id);
     if (index >= 0) {
-      _items[index].quantity = quantity;
-      if (_items[index].quantity <= 0) {
+      final updatedProduct = _items[index].copyWith(quantity: quantity);
+      if (updatedProduct.quantity <= 0) {
         _items.removeAt(index);
+      } else {
+        _items[index] = updatedProduct;
       }
       notifyListeners();
     }

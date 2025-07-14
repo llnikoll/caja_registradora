@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../widgets/numeric_keypad.dart';
-import '../database/repositories/transaccion_repository.dart'; // Import the repository
-import '../models/transaccion.dart'; // Import the model
-import '../database/repositories/caja_repository.dart'; // Import CajaRepository
-import '../services/caja_events.dart';
+import '../database/repositories/transaccion_repository.dart';
+import '../models/transaccion.dart';
+import '../database/repositories/caja_repository.dart';
 import '../utils/formato_moneda.dart';
 import '../providers/quick_amounts_provider.dart';
+import '../providers/calculator_provider.dart';
 
 enum PaymentType { cash, bank }
 
@@ -14,166 +14,24 @@ class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  State<HomeScreen> createState() => _Home2ScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen>
+class _Home2ScreenState extends State<HomeScreen>
     with AutomaticKeepAliveClientMixin {
   @override
   bool get wantKeepAlive => true;
-  String _display = '0';
-  String _currentInput = '';
-  double _total = 0.0;
-  String? _pendingOperation;
-  double? _firstOperand;
-  final TextEditingController _amountController = TextEditingController();
-  final TransaccionRepository _transaccionRepository =
-      TransaccionRepository(); // Add repository instance
-  final CajaRepository _cajaRepository =
-      CajaRepository(); // Add CajaRepository instance
+  final TransaccionRepository _transaccionRepository = TransaccionRepository();
+  final CajaRepository _cajaRepository = CajaRepository();
 
-  // Usar el formateador de moneda consistente
   String _formatNumber(double number) {
     return FormatoMoneda.formatear(number);
   }
 
-  void _onNumberPressed(String number) {
-    setState(() {
-      if (_pendingOperation != null && _firstOperand == null) {
-        _firstOperand = double.tryParse(_currentInput) ?? 0;
-        _currentInput = number;
-      } else {
-        _currentInput = _currentInput == '0' ? number : _currentInput + number;
-      }
-      _updateDisplay();
-    });
-  }
+  Future<void> _onSubmit(CalculatorProvider calculatorProvider) async {
+    calculatorProvider.onSubmit();
+    final total = calculatorProvider.total;
 
-  void _onDecimalPressed() {
-    if (!_currentInput.contains('.')) {
-      setState(() {
-        _currentInput += _currentInput.isEmpty ? '0.' : '.';
-        _updateDisplay();
-      });
-    }
-  }
-
-  // Historial de montos rápidos agregados para poder borrarlos
-  final List<int> _quickAmountHistory = [];
-
-  void _onQuickAmountPressed(int amount) {
-    setState(() {
-      final currentValue = double.tryParse(_currentInput) ?? 0;
-      final newValue = currentValue + amount;
-      _currentInput = newValue.toStringAsFixed(0);
-      _total = newValue.toDouble();
-      _quickAmountHistory.add(amount);
-      _updateDisplay();
-    });
-  }
-
-  void _onClear() {
-    setState(() {
-      if (_quickAmountHistory.isNotEmpty) {
-        // Si el último fue un monto rápido, lo restamos
-        final lastQuick = _quickAmountHistory.removeLast();
-        final currentValue = double.tryParse(_currentInput) ?? 0;
-        final newValue = (currentValue - lastQuick).clamp(0, double.infinity);
-        _currentInput = newValue == 0 ? '' : newValue.toStringAsFixed(0);
-        _total = newValue.toDouble();
-        _updateDisplay();
-      } else if (_currentInput.isNotEmpty) {
-        // Si no, borrado normal
-        _currentInput = _currentInput.substring(0, _currentInput.length - 1);
-        if (_currentInput.isEmpty) _currentInput = '0';
-        _updateDisplay();
-      }
-    });
-  }
-
-  void _onClearAll() {
-    setState(() {
-      _currentInput = '';
-      _display = '0';
-      _firstOperand = null;
-      _pendingOperation = null;
-      _total = 0.0;
-      _quickAmountHistory.clear(); // Limpiar historial al borrar todo
-    });
-  }
-
-  void _updateDisplay() {
-    if (_currentInput.isEmpty) {
-      _display = '0';
-    } else {
-      _display = _currentInput;
-    }
-  }
-
-  void _onOperationPressed(String operation) {
-    final currentValue = double.tryParse(_currentInput) ?? 0;
-
-    setState(() {
-      if (_pendingOperation != null && _firstOperand != null) {
-        // Realizar operación pendiente
-        final result = _performOperation(
-          _firstOperand!,
-          currentValue,
-          _pendingOperation!,
-        );
-        _firstOperand = result;
-        _total = result; // Actualizar el total
-        _display = result.toString();
-      } else if (_currentInput.isNotEmpty) {
-        _firstOperand = currentValue;
-        _total = currentValue; // Establecer el total inicial
-      }
-
-      _pendingOperation = operation;
-      _currentInput = ''; // Limpiar la entrada actual para el siguiente número
-      _updateDisplay();
-    });
-  }
-
-  double _performOperation(double a, double b, String operation) {
-    switch (operation) {
-      case '+':
-        return a + b;
-      case '-':
-        return a - b;
-      case '×':
-        return a * b;
-      default:
-        return b;
-    }
-  }
-
-  Future<void> _onSubmit() async {
-    // Si hay una operación pendiente, realizarla primero
-    if (_pendingOperation != null && _firstOperand != null) {
-      final currentValue = double.tryParse(_currentInput) ?? 0;
-      final result = _performOperation(
-        _firstOperand!,
-        currentValue,
-        _pendingOperation!,
-      );
-      _total = result;
-      _currentInput = result.toString();
-      _firstOperand = null;
-      _pendingOperation = null;
-      _updateDisplay();
-    } else if (_currentInput.isNotEmpty) {
-      // Si no hay operación pendiente pero hay un número ingresado,
-      // tomar ese número como el total
-      final currentValue = double.tryParse(_currentInput) ?? 0;
-      _total = currentValue;
-      _currentInput = currentValue.toString();
-      _firstOperand = null;
-      _pendingOperation = null;
-      _updateDisplay();
-    }
-
-    // Show payment type selection dialog
     final screenSize = MediaQuery.of(context).size;
     final isSmallScreen = screenSize.width < 400;
 
@@ -184,9 +42,7 @@ class _HomeScreenState extends State<HomeScreen>
         child: SingleChildScrollView(
           child: Container(
             padding: EdgeInsets.all(isSmallScreen ? 16.0 : 24.0),
-            constraints: BoxConstraints(
-              maxWidth: 500, // Maximum width for larger screens
-            ),
+            constraints: const BoxConstraints(maxWidth: 500),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -211,8 +67,6 @@ class _HomeScreenState extends State<HomeScreen>
                   ),
                 ),
                 const SizedBox(height: 24),
-
-                // Efectivo Button
                 _buildPaymentMethodButton(
                   context: context,
                   icon: Icons.money,
@@ -221,10 +75,7 @@ class _HomeScreenState extends State<HomeScreen>
                   onTap: () => Navigator.pop(context, PaymentType.cash),
                   isSmallScreen: isSmallScreen,
                 ),
-
                 const SizedBox(height: 16),
-
-                // Bancario Button
                 _buildPaymentMethodButton(
                   context: context,
                   icon: Icons.credit_card,
@@ -233,9 +84,7 @@ class _HomeScreenState extends State<HomeScreen>
                   onTap: () => Navigator.pop(context, PaymentType.bank),
                   isSmallScreen: isSmallScreen,
                 ),
-
                 const SizedBox(height: 16),
-
                 SizedBox(
                   width: double.infinity,
                   child: TextButton(
@@ -260,17 +109,17 @@ class _HomeScreenState extends State<HomeScreen>
       ),
     );
 
-    if (paymentType == null) return; // User dismissed the dialog
+    if (paymentType == null) return;
 
     if (paymentType == PaymentType.cash) {
-      await _showPaymentDialog();
+      await _showPaymentDialog(total, calculatorProvider.onClearAll);
     } else {
-      await _showBankPaymentDialog();
+      await _showBankPaymentDialog(total, calculatorProvider.onClearAll);
     }
   }
 
-  Future<void> _showPaymentDialog() async {
-    if (_total <= 0) {
+  Future<void> _showPaymentDialog(double total, VoidCallback onClearAll) async {
+    if (total <= 0) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -281,15 +130,14 @@ class _HomeScreenState extends State<HomeScreen>
       return;
     }
 
-    _amountController.clear();
+    final amountController = TextEditingController();
     final clientNameController = TextEditingController();
     final formKey = GlobalKey<FormState>();
-
-    // Variable para mantener el estado del diálogo
     double receivedAmountValue = 0;
 
+    final dialogContext = context;
     final result = await showDialog<Map<String, dynamic>>(
-      context: context,
+      context: dialogContext,
       builder: (context) => StatefulBuilder(
         builder: (context, setState) {
           return AlertDialog(
@@ -301,7 +149,7 @@ class _HomeScreenState extends State<HomeScreen>
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      'Total: ${_formatNumber(_total)}',
+                      'Total: ${_formatNumber(total)}',
                       style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -322,7 +170,7 @@ class _HomeScreenState extends State<HomeScreen>
                     ),
                     const SizedBox(height: 16),
                     TextFormField(
-                      controller: _amountController,
+                      controller: amountController,
                       keyboardType: TextInputType.number,
                       decoration: const InputDecoration(
                         labelText: 'Monto recibido',
@@ -334,25 +182,17 @@ class _HomeScreenState extends State<HomeScreen>
                         ),
                         counterText: '',
                       ),
-                      maxLength: 13, // Para manejar hasta 999,999,999
+                      maxLength: 13,
                       style: const TextStyle(fontSize: 16),
                       onChanged: (value) {
-                        // Obtener posición actual del cursor
-                        final cursorPos =
-                            _amountController.selection.baseOffset;
-
-                        // Limpiar el valor, mantener solo dígitos
+                        final cursorPos = amountController.selection.baseOffset;
                         final cleanValue = value.replaceAll(
                           RegExp(r'[^\d]'),
                           '',
                         );
-
-                        // Actualizar el valor numérico
                         receivedAmountValue = cleanValue.isEmpty
                             ? 0
                             : double.parse(cleanValue);
-
-                        // Formatear con puntos como separadores de miles
                         String formatted = '';
                         if (cleanValue.isNotEmpty) {
                           final number = int.parse(cleanValue);
@@ -361,39 +201,27 @@ class _HomeScreenState extends State<HomeScreen>
                             (Match m) => '${m[1]}.',
                           );
                         }
-
-                        // Calcular nueva posición del cursor
                         int newCursorPos = cursorPos;
                         if (value.length < formatted.length) {
-                          // Se agregó un punto
                           newCursorPos += (formatted.length - value.length);
                         } else if (value.length > formatted.length) {
-                          // Se eliminó un punto
                           newCursorPos -= (value.length - formatted.length);
                         }
-
-                        // Asegurar que la posición sea válida
                         newCursorPos = newCursorPos.clamp(0, formatted.length);
-
-                        // Actualizar el controlador
-                        _amountController.value = TextEditingValue(
+                        amountController.value = TextEditingValue(
                           text: formatted,
                           selection: TextSelection.collapsed(
                             offset: newCursorPos,
                           ),
                         );
-
-                        // Actualizar el estado
                         setState(() {});
                       },
                     ),
                     const SizedBox(height: 12),
-                    // Mostrar el vuelto en tiempo real
                     Builder(
                       builder: (context) {
-                        final change = receivedAmountValue - _total;
+                        final change = receivedAmountValue - total;
                         final changeText = 'Vuelto: ${_formatNumber(change)}';
-
                         return Column(
                           children: [
                             Text(
@@ -427,24 +255,21 @@ class _HomeScreenState extends State<HomeScreen>
               ),
               ElevatedButton(
                 onPressed: () {
-                  // Si el campo de monto recibido está vacío, asumir pago justo.
-                  // Si no está vacío, validar que el monto sea suficiente.
-                  if (_amountController.text.isEmpty ||
-                      receivedAmountValue >= _total) {
+                  if (amountController.text.isEmpty ||
+                      receivedAmountValue >= total) {
                     final double finalReceivedAmount =
-                        _amountController.text.isEmpty
-                        ? _total
+                        amountController.text.isEmpty
+                        ? total
                         : receivedAmountValue;
                     Navigator.pop(context, {
                       'amount': finalReceivedAmount,
                       'clientName': clientNameController.text,
                     });
                   } else {
-                    // Mostrar error si se ingresó un monto insuficiente
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text(
-                          'El monto recibido (₲${receivedAmountValue.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')}) debe ser mayor o igual al total (₲${_total.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')})',
+                          'El monto recibido (₲${receivedAmountValue.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')}) debe ser mayor o igual al total (₲${total.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')})',
                         ),
                         backgroundColor: Colors.red,
                       ),
@@ -469,15 +294,15 @@ class _HomeScreenState extends State<HomeScreen>
 
     final receivedAmount = result?['amount'] as double?;
 
-    if (receivedAmount != null && receivedAmount >= _total) {
-      final change = receivedAmount - _total;
+    if (receivedAmount != null && receivedAmount >= total) {
+      final change = receivedAmount - total;
 
       if (!mounted) return;
 
       showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (context) => AlertDialog(
+        builder: (alertContext) => AlertDialog(
           title: const Text(
             'Venta Realizada',
             style: TextStyle(fontWeight: FontWeight.bold),
@@ -491,7 +316,7 @@ class _HomeScreenState extends State<HomeScreen>
                 result?['clientName'] ?? 'Sin nombre',
               ),
               const SizedBox(height: 8),
-              _buildAmountRow('Total:', _formatNumber(_total)),
+              _buildAmountRow('Total:', _formatNumber(total)),
               _buildAmountRow('Recibido:', _formatNumber(receivedAmount)),
               const SizedBox(height: 8),
               _buildAmountRow('VUELTO:', _formatNumber(change), isTotal: true),
@@ -509,12 +334,14 @@ class _HomeScreenState extends State<HomeScreen>
                   ),
                 ),
                 onPressed: () async {
-                  // Make onPressed async
-                  Navigator.pop(context);
-                  // Save the transaction
+                  Navigator.pop(alertContext);
+                  if (!mounted) return;
                   var cajaAbierta = await _cajaRepository.getCajaAbierta();
                   if (cajaAbierta == null) {
-                    final bool success = await _promptAbrirCaja();
+                    if (!mounted) return;
+                    final bool success = await _cajaRepository
+                        .promptAndOpenCaja(context);
+                    if (!mounted) return;
                     if (success) {
                       cajaAbierta = await _cajaRepository.getCajaAbierta();
                     }
@@ -522,23 +349,20 @@ class _HomeScreenState extends State<HomeScreen>
 
                   if (cajaAbierta != null) {
                     final newTransaccion = Transaccion(
-                      id: null, // Database will generate ID
+                      id: null,
                       numeroTransaccion: DateTime.now().millisecondsSinceEpoch
-                          .toString(), // Generate a simple transaction number
-                      montoTotal: _total, // Correct parameter name
+                          .toString(),
+                      montoTotal: total,
                       metodoPago: 'efectivo',
-                      // fechaHora defaults to DateTime.now()
-                      nombreCliente:
-                          result?['clientName'], // Client name for cash
-                      // notas: null, // Optional
+                      nombreCliente: result?['clientName'],
                     );
                     await _transaccionRepository.insertTransaccion(
                       newTransaccion,
                     );
                   }
-                  _onClearAll();
+                  onClearAll();
                 },
-                child: const Text('Aceptar', style: TextStyle(fontSize: 16)),
+                child: const Text('ACEPTAR', style: TextStyle(fontSize: 16)),
               ),
             ),
           ],
@@ -549,7 +373,7 @@ class _HomeScreenState extends State<HomeScreen>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'El monto recibido (₲${receivedAmount.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]}.')}) es menor al total (₲${_total.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]}.')})',
+            'El monto recibido (₲${receivedAmount.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]}.')}) es menor al total (₲${total.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]}.')})',
           ),
           backgroundColor: Colors.red,
         ),
@@ -557,13 +381,17 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
-  Future<void> _showBankPaymentDialog() async {
+  Future<void> _showBankPaymentDialog(
+    double total,
+    VoidCallback onClearAll,
+  ) async {
     final clientNameController = TextEditingController();
     final formKey = GlobalKey<FormState>();
 
+    final dialogContext = context;
     final result = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
+      context: dialogContext,
+      builder: (dialogBuilderContext) => AlertDialog(
         title: const Text('Pago Bancario'),
         content: Form(
           key: formKey,
@@ -571,7 +399,7 @@ class _HomeScreenState extends State<HomeScreen>
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                'Total: ${_formatNumber(_total)}',
+                'Total: ${_formatNumber(total)}',
                 style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -596,13 +424,13 @@ class _HomeScreenState extends State<HomeScreen>
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
+            onPressed: () => Navigator.pop(dialogBuilderContext, false),
             child: const Text('CANCELAR'),
           ),
           ElevatedButton(
             onPressed: () {
               if (formKey.currentState!.validate()) {
-                Navigator.pop(context, true);
+                Navigator.pop(dialogBuilderContext, true);
               }
             },
             style: ElevatedButton.styleFrom(
@@ -617,208 +445,70 @@ class _HomeScreenState extends State<HomeScreen>
 
     if (result == true) {
       if (!mounted) return;
-
-      // Show success dialog
       await showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (context) => AlertDialog(
-          title: const Text(
-            'Pago Realizado',
-            style: TextStyle(color: Colors.green),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Pago bancario realizado con éxito',
-                style: TextStyle(fontSize: 16),
-              ),
-              const SizedBox(height: 16),
-              _buildAmountRow('Cliente:', clientNameController.text),
-              _buildAmountRow('Monto:', _formatNumber(_total)),
-              const SizedBox(height: 8),
-              const Text(
-                'Gracias por su compra!',
-                style: TextStyle(fontWeight: FontWeight.bold),
+        builder: (alertContext) {
+          return AlertDialog(
+            title: const Text(
+              'Pago Realizado',
+              style: TextStyle(color: Colors.green),
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Pago bancario realizado con éxito',
+                  style: TextStyle(fontSize: 16),
+                ),
+                const SizedBox(height: 16),
+                _buildAmountRow('Cliente:', clientNameController.text),
+                _buildAmountRow('Monto:', _formatNumber(total)),
+                const SizedBox(height: 8),
+                const Text(
+                  'Gracias por su compra!',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () async {
+                  Navigator.pop(alertContext);
+                  if (!mounted) return;
+                  var cajaAbierta = await _cajaRepository.getCajaAbierta();
+                  if (cajaAbierta == null) {
+                    if (!mounted) return;
+                    final bool success = await _cajaRepository
+                        .promptAndOpenCaja(context);
+                    if (!mounted) return;
+                    if (success) {
+                      cajaAbierta = await _cajaRepository.getCajaAbierta();
+                    }
+                  }
+
+                  if (cajaAbierta != null) {
+                    final newTransaccion = Transaccion(
+                      id: null,
+                      numeroTransaccion: DateTime.now().millisecondsSinceEpoch
+                          .toString(),
+                      montoTotal: total,
+                      metodoPago: 'transferencia',
+                      nombreCliente: clientNameController.text,
+                    );
+                    await _transaccionRepository.insertTransaccion(
+                      newTransaccion,
+                    );
+                  }
+                  onClearAll();
+                },
+                child: const Text('ACEPTAR'),
               ),
             ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () async {
-                // Make onPressed async
-                Navigator.pop(context);
-                // Save the transaction
-                var cajaAbierta = await _cajaRepository.getCajaAbierta();
-                if (cajaAbierta == null) {
-                  final bool success = await _promptAbrirCaja();
-                  if (success) {
-                    cajaAbierta = await _cajaRepository.getCajaAbierta();
-                  }
-                }
-
-                if (cajaAbierta != null) {
-                  final newTransaccion = Transaccion(
-                    id: null, // Database will generate ID
-                    numeroTransaccion: DateTime.now().millisecondsSinceEpoch
-                        .toString(), // Generate a simple transaction number
-                    montoTotal: _total, // Correct parameter name
-                    metodoPago: 'transferencia',
-                    // fechaHora defaults to DateTime.now()
-                    nombreCliente:
-                        clientNameController.text, // Client name for bank
-                    // notas: null, // Optional
-                  );
-                  await _transaccionRepository.insertTransaccion(
-                    newTransaccion,
-                  );
-                }
-                _onClearAll();
-              },
-              child: const Text('ACEPTAR'),
-            ),
-          ],
-        ),
+          );
+        },
       );
     }
-  }
-
-  String _formatInput(String value, {bool format = false}) {
-    // Solo permitir dígitos
-    String digits = value.replaceAll(RegExp(r'[^\d]'), '');
-
-    if (!format || digits.isEmpty) return digits;
-
-    // Formatear con puntos como separadores de miles
-    String formatted = '';
-    for (int i = 0; i < digits.length; i++) {
-      if (i > 0 && (digits.length - i) % 3 == 0) {
-        formatted += '.';
-      }
-      formatted += digits[i];
-    }
-
-    return formatted;
-  }
-
-  Future<bool> _promptAbrirCaja() async {
-    final montoController = TextEditingController();
-    final formKey = GlobalKey<FormState>();
-
-    // Variable para mantener el valor numérico real
-    double montoReal = 0;
-
-    if (!mounted) return false;
-
-    final bool? cajaAbierta = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Abrir Caja'),
-        content: Form(
-          key: formKey,
-          child: TextFormField(
-            controller: montoController,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(
-              labelText: 'Monto Inicial',
-              prefixText: '₲ ',
-              border: OutlineInputBorder(),
-              hintText: '0',
-              counterText: '',
-            ),
-            maxLength: 10, // Límite razonable para montos
-            onChanged: (value) {
-              // Obtener la posición actual del cursor
-              final cursorPos = montoController.selection.baseOffset;
-
-              // Obtener solo los dígitos
-              final cleanValue = _formatInput(value);
-
-              // Formatear con puntos
-              final formattedValue = _formatInput(cleanValue, format: true);
-
-              // Calcular la nueva posición del cursor
-              int newCursorPos = cursorPos;
-              if (value.length < formattedValue.length) {
-                // Se agregó un punto
-                newCursorPos += (formattedValue.length - value.length);
-              } else if (value.length > formattedValue.length) {
-                // Se eliminó un punto
-                newCursorPos -= (value.length - formattedValue.length);
-              }
-
-              // Asegurar que la posición del cursor sea válida
-              newCursorPos = newCursorPos.clamp(0, formattedValue.length);
-
-              // Actualizar el controlador con el valor formateado
-              montoController.value = TextEditingValue(
-                text: formattedValue,
-                selection: TextSelection.collapsed(offset: newCursorPos),
-              );
-
-              // Actualizar el valor numérico real (sin formato)
-              montoReal = double.tryParse(cleanValue) ?? 0.0;
-            },
-            validator: (value) {
-              if (value == null || value.isEmpty) {
-                return 'Por favor ingrese un monto';
-              }
-
-              final cleanValue = _formatInput(value);
-              final numericValue = double.tryParse(cleanValue);
-
-              if (numericValue == null) {
-                return 'Ingrese un monto válido';
-              }
-
-              if (numericValue <= 0) {
-                return 'El monto debe ser mayor a cero';
-              }
-
-              return null;
-            },
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              if (!formKey.currentState!.validate()) return;
-
-              // Capture values needed after async gap
-              final currentMounted = mounted;
-              if (!currentMounted) return;
-
-              final scaffoldMessenger = ScaffoldMessenger.of(context);
-              final navigator = Navigator.of(dialogContext);
-
-              try {
-                // Usar el valor numérico real que ya tenemos
-                await _cajaRepository.abrirCaja(montoReal);
-                CajaEvents().notificar(CajaStateEvent.abierta);
-
-                navigator.pop(true);
-                scaffoldMessenger.showSnackBar(
-                  const SnackBar(content: Text('Caja abierta exitosamente')),
-                );
-              } catch (e) {
-                navigator.pop(false);
-                scaffoldMessenger.showSnackBar(
-                  SnackBar(content: Text('Error al abrir caja: $e')),
-                );
-              }
-            },
-            child: const Text('Abrir'),
-          ),
-        ],
-      ),
-    );
-
-    return cajaAbierta ?? false;
   }
 
   Widget _buildPaymentMethodButton({
@@ -890,19 +580,6 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  @override
-  void initState() {
-    super.initState();
-    _onClearAll();
-  }
-
-  @override
-  void dispose() {
-    _amountController.dispose();
-    super.dispose();
-  }
-
-  // Widget auxiliar para mostrar filas de montos
   Widget _buildAmountRow(String label, String amount, {bool isTotal = false}) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -929,32 +606,31 @@ class _HomeScreenState extends State<HomeScreen>
 
   @override
   Widget build(BuildContext context) {
-    super.build(context); // Necesario para AutomaticKeepAliveClientMixin
+    super.build(context);
     final quickProvider = Provider.of<QuickAmountsProvider>(context);
+    final calculatorProvider = Provider.of<CalculatorProvider>(context);
     final quickAmounts = quickProvider.amounts;
-    // Return only the body content
     return SafeArea(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Pantalla de visualización
           Container(
             padding: const EdgeInsets.all(24),
             color: Colors.white,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                // Operación actual
-                if (_firstOperand != null || _pendingOperation != null)
+                if (calculatorProvider.firstOperand != null ||
+                    calculatorProvider.pendingOperation != null)
                   Text(
-                    '${_firstOperand != null ? _formatNumber(_firstOperand!) : ''} ${_pendingOperation ?? ''} ${_currentInput.isNotEmpty ? _formatNumber(double.parse(_currentInput)) : ''}',
+                    '${calculatorProvider.firstOperand != null ? _formatNumber(calculatorProvider.firstOperand!) : ''} ${calculatorProvider.pendingOperation ?? ''} ${calculatorProvider.currentInput.isNotEmpty ? _formatNumber(double.parse(calculatorProvider.currentInput)) : ''}',
                     style: const TextStyle(fontSize: 20, color: Colors.grey),
                     textAlign: TextAlign.right,
                   ),
-
-                // Monto actual
                 Text(
-                  _formatNumber(double.tryParse(_display) ?? 0),
+                  _formatNumber(
+                    double.tryParse(calculatorProvider.display) ?? 0,
+                  ),
                   style: const TextStyle(
                     fontSize: 40,
                     fontWeight: FontWeight.bold,
@@ -965,8 +641,6 @@ class _HomeScreenState extends State<HomeScreen>
               ],
             ),
           ),
-
-          // Teclado numérico
           Expanded(
             child: Container(
               padding: const EdgeInsets.all(8),
@@ -981,14 +655,14 @@ class _HomeScreenState extends State<HomeScreen>
                 ],
               ),
               child: NumericKeypad(
-                onNumberPressed: _onNumberPressed,
-                onDecimalPressed: _onDecimalPressed,
-                onClear: _onClear,
-                onClearAll: _onClearAll,
-                onEqualsPressed: _onSubmit,
-                onOperationPressed: _onOperationPressed,
+                onNumberPressed: calculatorProvider.onNumberPressed,
+                onDecimalPressed: calculatorProvider.onDecimalPressed,
+                onClear: calculatorProvider.onClear,
+                onClearAll: calculatorProvider.onClearAll,
+                onEqualsPressed: () => _onSubmit(calculatorProvider),
+                onOperationPressed: calculatorProvider.onOperationPressed,
                 quickAmounts: quickAmounts,
-                onQuickAmountPressed: _onQuickAmountPressed,
+                onQuickAmountPressed: calculatorProvider.onQuickAmountPressed,
               ),
             ),
           ),

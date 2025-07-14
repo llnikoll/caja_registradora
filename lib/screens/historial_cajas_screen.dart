@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart'; // Import Provider
 import '../database/repositories/caja_repository.dart';
-import '../database/repositories/transaccion_repository_ext.dart';
 import '../models/caja.dart';
-import '../models/transaccion.dart';
-import '../services/caja_events.dart';
+import '../models/transaccion.dart'; // Ensure this import is present
 import '../utils/formato_moneda.dart';
+import '../providers/sales_history_provider.dart'; // Import SalesHistoryProvider
 
 class HistorialCajasScreen extends StatefulWidget {
   const HistorialCajasScreen({super.key});
@@ -14,14 +14,13 @@ class HistorialCajasScreen extends StatefulWidget {
   State<HistorialCajasScreen> createState() => _HistorialCajasScreenState();
 }
 
-class _HistorialCajasScreenState extends State<HistorialCajasScreen> {
-  final CajaRepository _cajaRepository = CajaRepository();
-  final TransaccionRepositoryExt _transaccionRepositoryExt =
-      TransaccionRepositoryExt();
+class _HistorialCajasScreenState extends State<HistorialCajasScreen> with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+  final CajaRepository _cajaRepository =
+      CajaRepository(); // Keep for promptAndCloseCaja
   final DateFormat _dateFormat = DateFormat('dd/MM/yyyy HH:mm');
 
-  List<Caja> _cajas = [];
-  bool _isLoading = true;
   DateTimeRange _dateRange = DateTimeRange(
     start: DateTime.now().subtract(const Duration(days: 7)),
     end: DateTime.now(),
@@ -29,26 +28,12 @@ class _HistorialCajasScreenState extends State<HistorialCajasScreen> {
 
   @override
   void initState() {
-    super.initState();
-    _cargarCajas();
-  }
-
-  Future<void> _cargarCajas() async {
-    setState(() => _isLoading = true);
-    try {
-      final cajas = await _cajaRepository.getHistorialCajas();
-      setState(() {
-        _cajas = cajas;
-        _isLoading = false;
-      });
-    } catch (e) {
-      setState(() => _isLoading = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al cargar el historial: $e')),
-        );
-      }
-    }
+    super.initState(); // Ensure super.initState() is called
+    // Load data using the provider
+    Provider.of<SalesHistoryProvider>(
+      context,
+      listen: false,
+    ).loadSalesHistory();
   }
 
   Future<void> _seleccionarRangoFechas() async {
@@ -60,28 +45,23 @@ class _HistorialCajasScreenState extends State<HistorialCajasScreen> {
     );
 
     if (nuevoRango != null) {
+      if (!mounted) return; // Add mounted check
       setState(() {
         _dateRange = nuevoRango;
       });
-      _filtrarCajas();
+      // Reload data with new date range
+      Provider.of<SalesHistoryProvider>(
+        context,
+        listen: false,
+      ).loadSalesHistory();
     }
-  }
-
-  void _filtrarCajas() {
-    // Filtra las cajas por el rango de fechas seleccionado
-    setState(() {
-      _cajas = _cajas.where((caja) {
-        final apertura = caja.fechaApertura;
-        return apertura.isAfter(
-              _dateRange.start.subtract(const Duration(seconds: 1)),
-            ) &&
-            apertura.isBefore(_dateRange.end.add(const Duration(days: 1)));
-      }).toList();
-    });
   }
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // mustCallSuper fix
+    final salesHistoryProvider = Provider.of<SalesHistoryProvider>(context);
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Historial de Cajas'),
@@ -93,19 +73,20 @@ class _HistorialCajasScreenState extends State<HistorialCajasScreen> {
           ),
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: _cargarCajas,
+            onPressed:
+                salesHistoryProvider.loadSalesHistory, // Use provider method
             tooltip: 'Actualizar',
           ),
         ],
       ),
-      body: _isLoading
+      body: salesHistoryProvider.isLoading
           ? const Center(child: CircularProgressIndicator())
-          : _cajas.isEmpty
+          : salesHistoryProvider.cajas.isEmpty
           ? const Center(child: Text('No hay registros de cajas'))
           : ListView.builder(
-              itemCount: _cajas.length,
+              itemCount: salesHistoryProvider.cajas.length,
               itemBuilder: (context, index) {
-                final caja = _cajas[index];
+                final caja = salesHistoryProvider.cajas[index];
                 return _buildCajaCard(caja);
               },
             ),
@@ -227,8 +208,14 @@ class _HistorialCajasScreenState extends State<HistorialCajasScreen> {
   }
 
   void _mostrarDetalleCaja(Caja caja) async {
-    final transacciones = await _transaccionRepositoryExt
-        .getTransaccionesPorCaja(caja.fechaApertura, caja.fechaCierre);
+    final salesHistoryProvider = Provider.of<SalesHistoryProvider>(
+      context,
+      listen: false,
+    );
+    final transacciones = await salesHistoryProvider.getTransactionsForCaja(
+      caja.fechaApertura,
+      caja.fechaCierre,
+    );
     if (!mounted) return;
     showModalBottomSheet(
       context: context,
@@ -326,7 +313,10 @@ class _HistorialCajasScreenState extends State<HistorialCajasScreen> {
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: () => _mostrarDialogoCerrarCaja(caja),
+                    onPressed: () => _mostrarDialogoCerrarCaja(
+                      context,
+                      caja,
+                    ), // Pass context and caja
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.red,
                       padding: const EdgeInsets.symmetric(vertical: 16),
@@ -444,81 +434,31 @@ class _HistorialCajasScreenState extends State<HistorialCajasScreen> {
     );
   }
 
-  Future<void> _mostrarDialogoCerrarCaja(Caja caja) async {
-    final montoController = TextEditingController();
-    final formKey = GlobalKey<FormState>();
+  String calcularDuracion(DateTime inicio, DateTime fin) {
+    final duracion = fin.difference(inicio);
+    final horas = duracion.inHours;
+    final minutos = duracion.inMinutes.remainder(60);
 
-    if (!mounted) return;
-    Navigator.pop(context); // Cierra el sheet de detalles
-
-    final bool? cajaCerrada = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text('Cerrar Caja #${caja.id}'),
-        content: Form(
-          key: formKey,
-          child: TextFormField(
-            controller: montoController,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(
-              labelText: 'Monto Final en Caja',
-              prefixText: '₲',
-              border: OutlineInputBorder(),
-            ),
-            validator: (value) {
-              if (value == null || value.isEmpty) {
-                return 'Por favor ingrese un monto';
-              }
-              if (double.tryParse(value) == null) {
-                return 'Ingrese un monto válido';
-              }
-              return null;
-            },
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              if (!formKey.currentState!.validate()) return;
-
-              // Capture values needed after async gap
-              final currentMounted = mounted;
-              if (!currentMounted) return;
-
-              final scaffoldMessenger = ScaffoldMessenger.of(dialogContext);
-              final navigator = Navigator.of(dialogContext);
-
-              try {
-                final montoFinal = double.parse(montoController.text);
-                await _cajaRepository.cerrarCaja(montoFinal);
-                CajaEvents().notificar(CajaStateEvent.cerrada);
-                navigator.pop(true);
-              } catch (e) {
-                navigator.pop(false);
-                scaffoldMessenger.showSnackBar(
-                  SnackBar(content: Text('Error al cerrar caja: $e')),
-                );
-              }
-            },
-            child: const Text('Confirmar Cierre'),
-          ),
-        ],
-      ),
-    );
-
-    if (cajaCerrada == true) {
-      _cargarCajas(); // Recargar la lista de cajas
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Caja cerrada exitosamente')),
-        );
-      }
+    if (horas > 0) {
+      return '$horas h $minutos min';
+    } else {
+      return '$minutos min';
     }
   }
 
-  // Se eliminó el método _buildObservaciones ya que no se usa
+  void _mostrarDialogoCerrarCaja(BuildContext context, Caja caja) async {
+    final salesHistoryProvider = Provider.of<SalesHistoryProvider>(context, listen: false); // Get provider before async gap
+    final scaffoldMessenger = ScaffoldMessenger.of(context); // Capture before async gap
+
+    final success = await (_cajaRepository as dynamic).promptAndCloseCaja(context, caja);
+    if (success) {
+      // No need for mounted check here for salesHistoryProvider as it was obtained before the async gap
+      salesHistoryProvider.loadSalesHistory();
+
+      // No need for mounted check here for scaffoldMessenger as it was obtained before the async gap
+      scaffoldMessenger.showSnackBar(
+        const SnackBar(content: Text('Caja cerrada exitosamente')),
+      );
+    }
+  }
 }

@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
+import '../database/repositories/caja_repository.dart'; // Import CajaRepository
 
 class MontoInicialDialog extends StatefulWidget {
-  final Function(double) onAceptar;
-
-  const MontoInicialDialog({super.key, required this.onAceptar});
+  // No longer needs onAceptar, as CajaRepository handles the action
+  const MontoInicialDialog({super.key});
 
   @override
   State<MontoInicialDialog> createState() => _MontoInicialDialogState();
@@ -13,6 +13,7 @@ class _MontoInicialDialogState extends State<MontoInicialDialog> {
   final _formKey = GlobalKey<FormState>();
   final _montoController = TextEditingController();
   bool _isLoading = false;
+  final CajaRepository _cajaRepository = CajaRepository(); // Instance of CajaRepository
 
   @override
   void dispose() {
@@ -66,8 +67,9 @@ class _MontoInicialDialogState extends State<MontoInicialDialog> {
                     setState(() => _isLoading = true);
                     try {
                       final monto = double.parse(_montoController.text);
-                      await widget.onAceptar(monto);
-                      // Verificar si el widget sigue montado antes de usar el contexto
+                      await _cajaRepository.abrirCaja(monto);
+                      // Notify CajaEvents if needed, or handle it within CajaRepository
+                      // CajaEvents().notificar(CajaStateEvent.abierta);
                       if (mounted) {
                         Navigator.of(this.context).pop();
                       }

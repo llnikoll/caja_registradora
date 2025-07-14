@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../providers/empresa_provider.dart';
 import '../providers/quick_amounts_provider.dart';
 import '../providers/theme_provider.dart';
@@ -24,7 +23,14 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen>
   @override
   void initState() {
     super.initState();
-    _loadQuickAmounts();
+    // Initialize controllers with values from QuickAmountsProvider
+    final quickProvider = Provider.of<QuickAmountsProvider>(
+      context,
+      listen: false,
+    );
+    _quickAmount1Controller.text = quickProvider.amounts[0].toString();
+    _quickAmount2Controller.text = quickProvider.amounts[1].toString();
+    _quickAmount3Controller.text = quickProvider.amounts[2].toString();
   }
 
   @override
@@ -33,39 +39,6 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen>
     _quickAmount2Controller.dispose();
     _quickAmount3Controller.dispose();
     super.dispose();
-  }
-
-  Future<void> _loadQuickAmounts() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _quickAmount1Controller.text = (prefs.getInt('quick_amount_1') ?? 15000)
-          .toString();
-      _quickAmount2Controller.text = (prefs.getInt('quick_amount_2') ?? 18000)
-          .toString();
-      _quickAmount3Controller.text = (prefs.getInt('quick_amount_3') ?? 20000)
-          .toString();
-    });
-  }
-
-  Future<void> _saveQuickAmounts() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt(
-      'quick_amount_1',
-      int.tryParse(_quickAmount1Controller.text) ?? 15000,
-    );
-    await prefs.setInt(
-      'quick_amount_2',
-      int.tryParse(_quickAmount2Controller.text) ?? 18000,
-    );
-    await prefs.setInt(
-      'quick_amount_3',
-      int.tryParse(_quickAmount3Controller.text) ?? 20000,
-    );
-    if (mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Montos rápidos guardados')));
-    }
   }
 
   @override
@@ -150,8 +123,22 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen>
                           icon: const Icon(Icons.save),
                           label: const Text('Guardar'),
                           onPressed: () async {
-                            await _saveQuickAmounts();
-                            await quickProvider.loadFromPrefs();
+                            final scaffoldMessenger = ScaffoldMessenger.of(context); // Capture before async gap
+                            // Use the provider to set amounts
+                            await quickProvider.setAmounts([
+                              int.tryParse(_quickAmount1Controller.text) ??
+                                  15000,
+                              int.tryParse(_quickAmount2Controller.text) ??
+                                  18000,
+                              int.tryParse(_quickAmount3Controller.text) ??
+                                  20000,
+                            ]);
+                            // No need for mounted check here for scaffoldMessenger as it was obtained before the async gap
+                            scaffoldMessenger.showSnackBar(
+                                const SnackBar(
+                                  content: Text('Montos rápidos guardados'),
+                                ),
+                              );
                           },
                         ),
                       ),

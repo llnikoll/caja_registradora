@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
-import 'dart:async';
 import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:provider/provider.dart'; // Import Provider
 import '../utils/formato_moneda.dart';
 
-import '../database/repositories/caja_repository.dart';
-import '../database/repositories/transaccion_repository.dart';
-import '../models/caja.dart';
-import '../models/transaccion.dart';
-import '../services/caja_events.dart';
+// Remove direct repository imports, use provider instead
+// import '../database/repositories/caja_repository.dart';
+// import '../database/repositories/transaccion_repository.dart';
+// import '../models/caja.dart';
+// import '../models/transaccion.dart';
+// import '../services/caja_events.dart';
+
+import '../providers/reportes_provider.dart'; // Import the new provider
 
 class ReportesScreen extends StatefulWidget {
   const ReportesScreen({super.key});
@@ -21,78 +24,80 @@ class ReportesScreenState extends State<ReportesScreen>
     with AutomaticKeepAliveClientMixin {
   @override
   bool get wantKeepAlive => true;
-  final CajaRepository _cajaRepository = CajaRepository();
-  final TransaccionRepository _transaccionRepository = TransaccionRepository();
-
-  Caja? _cajaAbierta;
-  List<Transaccion> _transaccionesHoy = [];
-  Map<String, dynamic> _resumenHoy = {
-    'totalEfectivo': 0.0,
-    'totalTransferencia': 0.0,
-    'totalGeneral': 0.0,
-    'cantidadTransacciones': 0,
-  };
-
-  bool _isLoading = true;
-  late StreamSubscription _cajaEventsSubscription;
+  // Remove local state, use provider instead
+  // final CajaRepository _cajaRepository = CajaRepository();
+  // final TransaccionRepository _transaccionRepository = TransaccionRepository();
+  // Caja? _cajaAbierta;
+  // List<Transaccion> _transaccionesHoy = [];
+  // Map<String, dynamic> _resumenHoy = {
+  //   'totalEfectivo': 0.0,
+  //   'totalTransferencia': 0.0,
+  //   'totalGeneral': 0.0,
+  //   'cantidadTransacciones': 0,
+  // };
+  // bool _isLoading = true;
+  // late StreamSubscription _cajaEventsSubscription;
 
   @override
   void initState() {
     super.initState();
     initializeDateFormatting('es');
-    _cargarDatos();
-    _cajaEventsSubscription = CajaEvents().stream.listen((event) {
-      _cargarDatos();
-    });
+    // Data loading and event subscription handled by ReportesProvider
+    // _cargarDatos();
+    // _cajaEventsSubscription = CajaEvents().stream.listen((event) {
+    //   _cargarDatos();
+    // });
   }
 
   @override
   void dispose() {
-    _cajaEventsSubscription.cancel();
+    // Event subscription handled by ReportesProvider
+    // _cajaEventsSubscription.cancel();
     super.dispose();
   }
 
-  Future<void> _cargarDatos() async {
-    setState(() => _isLoading = true);
-
-    try {
-      _cajaAbierta = await _cajaRepository.getCajaAbierta();
-
-      if (_cajaAbierta != null) {
-        final desde = _cajaAbierta!.fechaApertura;
-        final hasta = _cajaAbierta!.fechaCierre ?? DateTime.now();
-        _transaccionesHoy = await _transaccionRepository
-            .getTransaccionesPorRangoFechas(desde, hasta);
-        _resumenHoy = await _transaccionRepository.getResumenVentas(
-          desde,
-          hasta,
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error al cargar datos: $e')));
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-    }
-  }
+  // Data loading logic moved to ReportesProvider
+  // Future<void> _cargarDatos() async {
+  //   setState(() => _isLoading = true);
+  //   try {
+  //     _cajaAbierta = await _cajaRepository.getCajaAbierta();
+  //     if (_cajaAbierta != null) {
+  //       final desde = _cajaAbierta!.fechaApertura;
+  //       final hasta = _cajaAbierta!.fechaCierre ?? DateTime.now();
+  //       _transaccionesHoy = await _transaccionRepository
+  //           .getTransaccionesPorRangoFechas(desde, hasta);
+  //       _resumenHoy = await _transaccionRepository.getResumenVentas(
+  //         desde,
+  //         hasta,
+  //       );
+  //     }
+  //   } catch (e) {
+  //     if (mounted) {
+  //       ScaffoldMessenger.of(
+  //         context,
+  //       ).showSnackBar(SnackBar(content: Text('Error al cargar datos: $e')));
+  //     }
+  //   } finally {
+  //     if (mounted) {
+  //       setState(() => _isLoading = false);
+  //     }
+  //   }
+  // }
 
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    if (_isLoading) {
+    final reportesProvider = Provider.of<ReportesProvider>(context);
+
+    if (reportesProvider.isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
-    if (_cajaAbierta == null) {
+    if (reportesProvider.cajaAbierta == null) {
       return _buildSinCajaAbierta();
     }
     return Scaffold(
       appBar: AppBar(title: const Text('Reportes de Caja')),
-      body: _buildResumenTab(),
+      body: _buildResumenTab(reportesProvider),
     );
   }
 
@@ -121,27 +126,28 @@ class ReportesScreenState extends State<ReportesScreen>
     );
   }
 
-  Widget _buildResumenTab() {
+  Widget _buildResumenTab(ReportesProvider reportesProvider) {
     return RefreshIndicator(
-      onRefresh: _cargarDatos,
+      onRefresh: reportesProvider.loadReportData, // Use provider method
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _buildResumenCaja(),
+            _buildResumenCaja(reportesProvider),
             const SizedBox(height: 24),
-            _buildResumenVentas(),
+            _buildResumenVentas(reportesProvider),
             const SizedBox(height: 24),
-            _buildUltimasTransacciones(),
+            _buildUltimasTransacciones(reportesProvider),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildResumenCaja() {
+  Widget _buildResumenCaja(ReportesProvider reportesProvider) {
+    final cajaAbierta = reportesProvider.cajaAbierta!;
     return Card(
       elevation: 4,
       child: Padding(
@@ -161,10 +167,10 @@ class ReportesScreenState extends State<ReportesScreen>
                 const Text('Estado:'),
                 Chip(
                   label: Text(
-                    _cajaAbierta?.fechaCierre == null ? 'Abierta' : 'Cerrada',
+                    cajaAbierta.fechaCierre == null ? 'Abierta' : 'Cerrada',
                     style: const TextStyle(color: Colors.white),
                   ),
-                  backgroundColor: _cajaAbierta?.fechaCierre == null
+                  backgroundColor: cajaAbierta.fechaCierre == null
                       ? Colors.green
                       : Colors.red,
                 ),
@@ -178,12 +184,12 @@ class ReportesScreenState extends State<ReportesScreen>
                 Text(
                   DateFormat(
                     'dd/MM/yyyy HH:mm',
-                  ).format(_cajaAbierta!.fechaApertura),
+                  ).format(cajaAbierta.fechaApertura),
                 ),
               ],
             ),
             const SizedBox(height: 8),
-            if (_cajaAbierta?.fechaCierre != null) ...[
+            if (cajaAbierta.fechaCierre != null) ...[
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -191,7 +197,7 @@ class ReportesScreenState extends State<ReportesScreen>
                   Text(
                     DateFormat(
                       'dd/MM/yyyy HH:mm',
-                    ).format(_cajaAbierta!.fechaCierre!),
+                    ).format(cajaAbierta.fechaCierre!),
                   ),
                 ],
               ),
@@ -201,16 +207,16 @@ class ReportesScreenState extends State<ReportesScreen>
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text('Monto Inicial:'),
-                Text(FormatoMoneda.formatear(_cajaAbierta!.montoInicial)),
+                Text(FormatoMoneda.formatear(cajaAbierta.montoInicial)),
               ],
             ),
-            if (_cajaAbierta?.montoFinal != null) ...[
+            if (cajaAbierta.montoFinal != null) ...[
               const SizedBox(height: 8),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text('Monto Final:'),
-                  Text(FormatoMoneda.formatear(_cajaAbierta!.montoFinal!)),
+                  Text(FormatoMoneda.formatear(cajaAbierta.montoFinal!)),
                 ],
               ),
             ],
@@ -220,7 +226,8 @@ class ReportesScreenState extends State<ReportesScreen>
     );
   }
 
-  Widget _buildResumenVentas() {
+  Widget _buildResumenVentas(ReportesProvider reportesProvider) {
+    final resumenHoy = reportesProvider.resumenHoy;
     return Card(
       elevation: 4,
       child: Padding(
@@ -236,21 +243,21 @@ class ReportesScreenState extends State<ReportesScreen>
             const SizedBox(height: 8),
             _buildItemResumen(
               'Efectivo:',
-              FormatoMoneda.formatear(_resumenHoy['totalEfectivo'] ?? 0),
+              FormatoMoneda.formatear(resumenHoy['totalEfectivo'] ?? 0),
               Icons.money,
               Colors.green,
             ),
             const SizedBox(height: 8),
             _buildItemResumen(
               'Transferencia:',
-              FormatoMoneda.formatear(_resumenHoy['totalTransferencia'] ?? 0),
+              FormatoMoneda.formatear(resumenHoy['totalTransferencia'] ?? 0),
               Icons.account_balance_wallet,
               Colors.blue,
             ),
             const SizedBox(height: 8),
             _buildItemResumen(
               'Total General:',
-              FormatoMoneda.formatear(_resumenHoy['totalGeneral'] ?? 0),
+              FormatoMoneda.formatear(resumenHoy['totalGeneral'] ?? 0),
               Icons.attach_money,
               Colors.purple,
               isTotal: true,
@@ -258,7 +265,7 @@ class ReportesScreenState extends State<ReportesScreen>
             const SizedBox(height: 8),
             _buildItemResumen(
               'N° de Transacciones:',
-              '${_resumenHoy['cantidadTransacciones'] ?? '0'}',
+              '${resumenHoy['cantidadTransacciones'] ?? '0'}',
               Icons.receipt,
               Colors.orange,
             ),
@@ -307,8 +314,9 @@ class ReportesScreenState extends State<ReportesScreen>
     );
   }
 
-  Widget _buildUltimasTransacciones() {
-    if (_transaccionesHoy.isEmpty) {
+  Widget _buildUltimasTransacciones(ReportesProvider reportesProvider) {
+    final transaccionesHoy = reportesProvider.transaccionesHoy;
+    if (transaccionesHoy.isEmpty) {
       return const Card(
         child: Padding(
           padding: EdgeInsets.all(16.0),
@@ -333,12 +341,12 @@ class ReportesScreenState extends State<ReportesScreen>
           ListView.separated(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            itemCount: _transaccionesHoy.length > 5
+            itemCount: transaccionesHoy.length > 5
                 ? 5
-                : _transaccionesHoy.length,
+                : transaccionesHoy.length,
             separatorBuilder: (context, index) => const Divider(height: 0),
             itemBuilder: (context, index) {
-              final transaccion = _transaccionesHoy[index];
+              final transaccion = transaccionesHoy[index];
               return ListTile(
                 leading: CircleAvatar(
                   backgroundColor:

@@ -6,6 +6,9 @@ import 'providers/cart_provider.dart';
 import 'providers/empresa_provider.dart'; // Import the EmpresaProvider
 import 'providers/quick_amounts_provider.dart';
 import 'providers/theme_provider.dart'; // Import ThemeProvider
+import 'providers/calculator_provider.dart'; // Import CalculatorProvider
+import 'providers/sales_history_provider.dart'; // Import SalesHistoryProvider
+import 'providers/reportes_provider.dart'; // Import ReportesProvider
 import 'widgets/main_layout.dart'; // Import the new MainLayout
 import 'restart_widget.dart';
 
@@ -29,6 +32,9 @@ void main() async {
           ChangeNotifierProvider(
             create: (context) => ThemeProvider(),
           ), // Add ThemeProvider
+          ChangeNotifierProvider(create: (context) => CalculatorProvider()), // Add CalculatorProvider
+          ChangeNotifierProvider(create: (context) => SalesHistoryProvider()), // Add SalesHistoryProvider
+          ChangeNotifierProvider(create: (context) => ReportesProvider()), // Add ReportesProvider
           // Aquí podrías agregar más providers si es necesario
         ],
         child: const CajaRegistradoraApp(),

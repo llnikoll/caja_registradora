@@ -19,6 +19,8 @@ class Transaccion {
     this.notas,
   }) : fechaHora = fechaHora ?? DateTime.now();
 
+  // Dummy comment to force re-analysis
+
   // Convertir un Map a Transaccion
   factory Transaccion.fromMap(Map<String, dynamic> map) => Transaccion(
         id: map['id'],

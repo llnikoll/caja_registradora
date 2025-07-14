@@ -8,9 +8,9 @@ import '../screens/ayuda_screen.dart';
 import '../database/repositories/caja_repository.dart';
 import '../database/repositories/transaccion_repository.dart';
 import '../models/caja.dart';
-import 'cierre_caja_dialog.dart';
 import '../restart_widget.dart';
 import '../providers/empresa_provider.dart';
+import './cierre_caja_dialog.dart'; // Import the new dialog widget
 
 class MainLayout extends StatefulWidget {
   const MainLayout({super.key});
@@ -336,15 +336,7 @@ class _MainLayoutState extends State<MainLayout> {
             leading: const Icon(Icons.home),
             title: const Text('Inicio'),
             selected: _selectedIndex == 0,
-            onTap: () async {
-              // Pequeño delay para asegurar reconstrucción limpia
-              await Future.delayed(const Duration(milliseconds: 100));
-              if (!mounted) return;
-              Navigator.of(context).pushAndRemoveUntil(
-                MaterialPageRoute(builder: (context) => const MainLayout()),
-                (route) => false,
-              );
-            },
+            onTap: () => _onItemTapped(0),
           ),
           ListTile(
             leading: const Icon(Icons.point_of_sale),

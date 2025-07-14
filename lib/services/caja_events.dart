@@ -1,6 +1,6 @@
 import 'dart:async';
 
-enum CajaStateEvent { abierta, cerrada }
+enum CajaStateEvent { abierta, cerrada, transaccionRealizada }
 
 class CajaEvents {
   static final _instance = CajaEvents._internal();
